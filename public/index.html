@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capsule — Record. Share. Track.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #09090b;
+      --surface: #18181b;
+      --surface-hover: #27272a;
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
+      --text: #fafafa;
+      --text-muted: rgba(255,255,255,0.45);
+      --accent: #8b5cf6;
+      --accent-hover: #a78bfa;
+      --accent-glow: rgba(139,92,246,0.15);
+      --red: #ef4444;
+      --red-hover: #f87171;
+      --green: #22c55e;
+      --green-hover: #4ade80;
+      --amber: #f59e0b;
+      --radius: 12px;
+      --radius-lg: 16px;
+    }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+    /* ——— Header ——— */
+    header { display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; border-bottom: 1px solid var(--border); background: rgba(9,9,11,0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); position: sticky; top: 0; z-index: 100; }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: -0.4px; }
+    .logo-mark { width: 30px; height: 30px; background: linear-gradient(135deg, #8b5cf6, #6d28d9); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: white; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+
+    .nav-tabs { display: flex; gap: 2px; background: var(--surface); border-radius: 10px; padding: 3px; }
+    .nav-tab { padding: 7px 16px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+    .nav-tab:hover { color: var(--text); }
+    .nav-tab.active { color: var(--text); background: var(--surface-hover); box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+
+    /* ——— Buttons ——— */
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; letter-spacing: -0.1px; }
+    .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .btn-primary { background: var(--red); color: white; border-radius: 9999px; }
+    .btn-primary:hover { background: var(--red-hover); box-shadow: 0 0 20px rgba(239,68,68,0.25); }
+    .btn-secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #333; border-color: var(--border-hover); }
+    .btn-accent { background: var(--green); color: #000; border-radius: 9999px; }
+    .btn-accent:hover { background: var(--green-hover); }
+    .btn-violet { background: var(--accent); color: white; border-radius: 9999px; }
+    .btn-violet:hover { background: var(--accent-hover); box-shadow: 0 0 20px var(--accent-glow); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-icon { width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; transition: all 0.2s; }
+    .btn-icon:hover { background: var(--surface-hover); color: var(--text); border-color: var(--border-hover); }
+    .btn-icon svg { width: 15px; height: 15px; }
+
+    /* ——— Layout ——— */
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 28px; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ——— Record Panel ——— */
+    .record-panel { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 56px 32px 40px; text-align: center; }
+    .record-panel h2 { font-size: 32px; font-weight: 700; letter-spacing: -0.8px; background: linear-gradient(to right, #fff, rgba(255,255,255,0.7)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .record-panel p { color: var(--text-muted); font-size: 15px; max-width: 420px; line-height: 1.6; }
+    .record-options { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .toggle-option { display: flex; align-items: center; gap: 8px; padding: 9px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 9999px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; user-select: none; color: var(--text-muted); }
+    .toggle-option:hover { border-color: var(--border-hover); color: var(--text); }
+    .toggle-option.active { border-color: var(--accent); color: var(--text); background: var(--accent-glow); }
+    .toggle-switch { width: 32px; height: 18px; background: #3f3f46; border-radius: 9px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+    .toggle-option.active .toggle-switch { background: var(--accent); }
+    .toggle-switch::after { content: ''; position: absolute; width: 14px; height: 14px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.2s; }
+    .toggle-option.active .toggle-switch::after { transform: translateX(14px); }
+    .record-big-btn { padding: 16px 40px; font-size: 15px; gap: 10px; box-shadow: 0 0 30px rgba(239,68,68,0.2); }
+    .record-big-btn:hover { box-shadow: 0 0 40px rgba(239,68,68,0.35); }
+
+    /* ——— Recording Active ——— */
+    .recording-active { display: none; flex-direction: column; align-items: center; gap: 24px; padding: 40px 0; }
+    .recording-active.visible { display: flex; }
+    .recording-indicator { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+    .rec-dot { width: 10px; height: 10px; background: var(--red); border-radius: 50%; animation: pulse 1.2s ease-in-out infinite; }
+    .rec-dot.paused { animation: none; background: var(--amber); }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(.8);} }
+    .timer { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 3px; color: rgba(255,255,255,0.9); }
+    .recording-controls { display: flex; gap: 10px; }
+
+    /* ——— Preview ——— */
+    .preview-container { display: none; width: 100%; max-width: 800px; margin: 0 auto; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); background: #000; }
+    .preview-container.visible { display: block; }
+    .preview-container video { width: 100%; display: block; }
+
+    .webcam-float-preview { position: fixed; bottom: 24px; left: 24px; width: 160px; height: 160px; border-radius: 50%; overflow: hidden; border: 3px solid var(--accent); z-index: 150; box-shadow: 0 8px 32px rgba(0,0,0,.6); display: none; }
+    .webcam-float-preview.visible { display: block; }
+    .webcam-float-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+    /* ——— Script / Teleprompter ——— */
+    .script-section { max-width: 800px; margin: 28px auto 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .script-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .script-header h4 { font-size: 13px; font-weight: 600; letter-spacing: -0.1px; text-transform: uppercase; color: var(--text-muted); }
+    .script-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .script-body { padding: 16px 20px; }
+    .script-textarea { width: 100%; min-height: 120px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--text); font-size: 14px; line-height: 1.7; resize: vertical; outline: none; font-family: inherit; transition: border-color 0.2s; }
+    .script-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .script-textarea::placeholder { color: rgba(255,255,255,0.2); }
+    .script-controls { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+    .pace-select { padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 12px; outline: none; font-family: inherit; }
+    .pace-select:focus { border-color: var(--accent); }
+    .speed-slider { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+    .speed-slider input[type="range"] { width: 80px; accent-color: var(--accent); }
+
+    /* ——— AI Writer ——— */
+    .ai-writer-bar { display: flex; gap: 8px; margin-bottom: 12px; }
+    .ai-prompt-input { flex: 1; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 9999px; color: var(--text); font-size: 13px; outline: none; font-family: inherit; transition: all 0.2s; }
+    .ai-prompt-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .ai-prompt-input::placeholder { color: rgba(255,255,255,0.2); }
+    .btn-ai { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; white-space: nowrap; border-radius: 9999px; }
+    .btn-ai:hover { background: linear-gradient(135deg, #a78bfa, #7c3aed); box-shadow: 0 0 24px var(--accent-glow); }
+    .btn-ai:disabled { opacity: .5; cursor: not-allowed; }
+    .ai-loading { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ai-suggestions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .ai-chip { padding: 5px 14px; border-radius: 9999px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+    .ai-chip:hover { border-color: var(--accent); color: var(--text); background: var(--accent-glow); }
+
+    /* ——— Teleprompter Overlay ——— */
+    .teleprompter-overlay { display: none; position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: linear-gradient(transparent, rgba(0,0,0,0.97) 35%); z-index: 140; pointer-events: none; }
+    .teleprompter-overlay.visible { display: block; }
+    .teleprompter-inner { position: absolute; bottom: 0; left: 0; right: 0; height: 180px; overflow: hidden; padding: 0 60px 20px; }
+    .teleprompter-text { font-size: 24px; line-height: 1.6; color: rgba(255,255,255,0.95); text-align: center; white-space: pre-wrap; transition: transform 0.3s linear; font-weight: 400; }
+
+    /* ——— Slides ——— */
+    .slides-section { max-width: 800px; margin: 16px auto 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .slides-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .slides-header h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: -0.1px; }
+    .slides-tabs { display: flex; gap: 6px; padding: 12px 20px; overflow-x: auto; border-bottom: 1px solid var(--border); }
+    .slide-tab { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.2s; font-family: inherit; }
+    .slide-tab:hover { border-color: var(--border-hover); color: var(--text); }
+    .slide-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .slide-tab .slide-num { font-size: 10px; opacity: .5; }
+    .add-slide-btn { border-style: dashed !important; font-size: 15px; padding: 6px 12px; }
+    .slide-content { padding: 20px; }
+    .slide-title-input { width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 15px; font-weight: 600; outline: none; margin-bottom: 12px; font-family: inherit; transition: border-color 0.2s; }
+    .slide-title-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .slide-notes-input { width: 100%; min-height: 60px; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; line-height: 1.6; outline: none; resize: vertical; font-family: inherit; transition: border-color 0.2s; }
+    .slide-notes-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .slide-links { margin-top: 12px; }
+    .slide-link-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+    .slide-link-row input { flex: 1; padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 12px; outline: none; font-family: inherit; transition: border-color 0.2s; }
+    .slide-link-row input:focus { border-color: var(--accent); }
+    .slide-link-row button { width: 28px; height: 28px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .slide-link-row button:hover { background: var(--surface-hover); color: var(--red); }
+    .slide-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; justify-content: space-between; }
+
+    /* ——— Slide Overlay ——— */
+    .slide-overlay { display: none; position: fixed; top: 80px; right: 24px; width: 300px; background: rgba(9,9,11,0.92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: var(--radius-lg); z-index: 140; padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
+    .slide-overlay.visible { display: block; }
+    .slide-overlay h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.2px; }
+    .slide-overlay .slide-notes { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px; }
+    .slide-overlay .slide-links-list { font-size: 12px; }
+    .slide-overlay .slide-links-list a { color: var(--accent-hover); text-decoration: none; display: block; margin-bottom: 4px; transition: color 0.2s; }
+    .slide-overlay .slide-links-list a:hover { color: white; }
+    .slide-overlay .slide-nav { display: flex; gap: 8px; justify-content: space-between; margin-top: 14px; }
+    .slide-overlay .slide-nav button { flex: 1; padding: 8px; border: 1px solid var(--border); background: var(--surface); color: white; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: all 0.2s; }
+    .slide-overlay .slide-nav button:hover { background: var(--surface-hover); border-color: var(--border-hover); }
+    .slide-counter { text-align: center; font-size: 11px; color: var(--text-muted); margin-bottom: 10px; font-weight: 500; }
+
+    /* ——— Library ——— */
+    .library-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .library-header h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .video-count { color: var(--text-muted); font-size: 13px; font-weight: 500; }
+    .sort-controls { display: flex; gap: 4px; background: var(--surface); border-radius: 8px; padding: 3px; }
+    .sort-btn { padding: 5px 12px; font-size: 12px; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.2s; font-family: inherit; font-weight: 500; }
+    .sort-btn.active { background: var(--surface-hover); color: var(--text); }
+
+    .folder-bar { display: flex; gap: 8px; margin-bottom: 24px; overflow-x: auto; padding-bottom: 4px; }
+    .folder-tab { display: flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 9999px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.2s; font-family: inherit; }
+    .folder-tab:hover { border-color: var(--border-hover); color: var(--text); }
+    .folder-tab.active { background: var(--surface-hover); border-color: var(--accent); color: var(--text); }
+    .folder-tab svg { width: 13px; height: 13px; }
+    .folder-count { background: rgba(255,255,255,0.06); padding: 1px 7px; border-radius: 9999px; font-size: 10px; }
+    .folder-tab.active .folder-count { background: var(--accent-glow); }
+    .add-folder-btn { border-style: dashed !important; }
+
+    /* ——— Video Grid ——— */
+    .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .video-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: all 0.2s; }
+    .video-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+    .video-thumb { position: relative; aspect-ratio: 16/9; background: #000; overflow: hidden; cursor: pointer; }
+    .video-thumb video { width: 100%; height: 100%; object-fit: cover; }
+    .video-duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.75); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .video-views-badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.65); backdrop-filter: blur(4px); padding: 3px 10px; border-radius: 9999px; font-size: 11px; display: flex; align-items: center; gap: 4px; font-weight: 500; }
+    .video-views-badge svg { width: 12px; height: 12px; }
+    .shared-badge { position: absolute; top: 8px; left: 8px; background: var(--accent); padding: 3px 10px; border-radius: 9999px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+    .video-info { padding: 14px 16px; }
+    .video-title-input { background: transparent; border: 1px solid transparent; color: var(--text); font-size: 14px; font-weight: 600; width: 100%; padding: 4px 6px; border-radius: 6px; outline: none; margin-bottom: 8px; font-family: inherit; letter-spacing: -0.1px; transition: all 0.2s; }
+    .video-title-input:focus { border-color: var(--accent); background: var(--bg); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .video-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .video-date { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .video-actions { display: flex; gap: 2px; }
+    .video-actions button { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+    .video-actions button:hover { background: var(--surface-hover); color: var(--text); }
+    .video-actions button.delete:hover { background: rgba(239,68,68,.12); color: var(--red); }
+    .video-actions button.active-share { color: var(--accent); }
+    .video-actions button svg { width: 14px; height: 14px; }
+    .empty-state { text-align: center; padding: 64px 20px; color: var(--text-muted); }
+    .empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: .25; }
+    .empty-state p { font-size: 14px; font-weight: 500; }
+
+    /* ——— Modals ——— */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.visible { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: 90%; max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+    .modal-sm { max-width: 440px; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-header h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+    .modal-body { padding: 20px; overflow-y: auto; }
+    .modal-body video { width: 100%; border-radius: 10px; background: #000; }
+    .modal-footer { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--border); justify-content: flex-end; }
+
+    /* ——— Share ——— */
+    .share-link-box { display: flex; gap: 8px; margin: 16px 0; }
+    .share-link-input { flex: 1; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 9999px; color: var(--text); font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace; outline: none; transition: all 0.2s; }
+    .share-link-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .share-option { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .share-option:last-child { border-bottom: none; }
+    .share-option-label { font-size: 13px; font-weight: 500; }
+    .share-option-label small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 3px; font-weight: 400; }
+    .share-toggle { width: 40px; height: 22px; background: #3f3f46; border-radius: 11px; position: relative; cursor: pointer; transition: background 0.2s; border: none; }
+    .share-toggle.on { background: var(--accent); }
+    .share-toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 3px; left: 3px; transition: transform 0.2s; }
+    .share-toggle.on::after { transform: translateX(18px); }
+    .pw-input { padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 12px; width: 140px; outline: none; font-family: inherit; }
+    .pw-input:focus { border-color: var(--accent); }
+
+    /* ——— Analytics ——— */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 32px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; transition: all 0.3s; }
+    .stat-card:hover { border-color: var(--accent); box-shadow: 0 0 24px var(--accent-glow); }
+    .stat-card .stat-value { font-size: 36px; font-weight: 700; margin-bottom: 4px; letter-spacing: -1px; }
+    .stat-card .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .view-table { width: 100%; border-collapse: collapse; }
+    .view-table th { text-align: left; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+    .view-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .view-table tr:hover { background: rgba(255,255,255,0.02); }
+    .pct-bar { width: 56px; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+    .pct-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+    /* ——— Toast ——— */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: rgba(24,24,27,0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: 10px; padding: 12px 20px; font-size: 13px; font-weight: 500; z-index: 300; transform: translateY(80px); opacity: 0; transition: all 0.3s cubic-bezier(0.16,1,0.3,1); }
+    .toast.visible { transform: translateY(0); opacity: 1; }
+
+    .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+    /* ——— Responsive ——— */
+    @media (max-width: 640px) {
+      .container { padding: 20px 16px; }
+      header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      .video-grid { grid-template-columns: 1fr; }
+      .timer { font-size: 40px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .record-panel h2 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">C</div>
+    Capsule
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-page="record" onclick="showPage('record')">Record</button>
+    <button class="nav-tab" data-page="library" onclick="showPage('library')">Library</button>
+    <button class="nav-tab" data-page="analytics" onclick="showPage('analytics')">Analytics</button>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-primary" id="startRecordBtn" onclick="startRecording()">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>
+      Record
+    </button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ====== RECORD PAGE ====== -->
+  <div class="page active" id="page-record">
+    <div class="record-panel" id="recordPanel">
+      <h2>Capture anything on screen</h2>
+      <p>Record, share a link, and see exactly who watched and for how long.</p>
+      <div class="record-options">
+        <div class="toggle-option active" id="toggleWebcam" onclick="toggleOption('webcam')">
+          <div class="toggle-switch"></div>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Webcam
+        </div>
+        <div class="toggle-option active" id="toggleAudio" onclick="toggleOption('audio')">
+          <div class="toggle-switch"></div>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+          Mic
+        </div>
+        <div class="toggle-option active" id="toggleSysAudio" onclick="toggleOption('sysAudio')">
+          <div class="toggle-switch"></div>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          System Audio
+        </div>
+        <div class="toggle-option" id="toggleTeleprompter" onclick="toggleOption('teleprompter')">
+          <div class="toggle-switch"></div>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Teleprompter
+        </div>
+      </div>
+      <button class="btn btn-primary record-big-btn" onclick="startRecording()">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><circle cx="12" cy="12" r="5"/></svg>
+        Start Recording
+      </button>
+    </div>
+
+    <div class="recording-active" id="recordingActive">
+      <div class="recording-indicator">
+        <div class="rec-dot" id="recDot"></div>
+        <span id="recStatus">Recording</span>
+      </div>
+      <div class="timer" id="timer">00:00</div>
+      <div class="recording-controls">
+        <button class="btn btn-secondary" id="pauseBtn" onclick="togglePause()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          Pause
+        </button>
+        <button class="btn btn-primary" onclick="stopRecording()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          Stop & Save
+        </button>
+      </div>
+    </div>
+
+    <div class="preview-container" id="previewContainer">
+      <video id="previewVideo" controls></video>
+    </div>
+    <div id="previewActions" style="display:none;justify-content:center;gap:10px;margin-top:16px;">
+      <button class="btn btn-accent" onclick="downloadLatest()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </button>
+      <button class="btn btn-violet" onclick="shareLatest()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share Link
+      </button>
+      <button class="btn btn-secondary" onclick="dismissPreview()">Done</button>
+    </div>
+
+    <!-- Script & Teleprompter -->
+    <div class="script-section" id="scriptSection">
+      <div class="script-header">
+        <h4>Script & Teleprompter</h4>
+        <div class="script-stats">
+          <span id="wordCount">0 words</span>
+          <span id="readTime">~0 min</span>
+        </div>
+      </div>
+      <div class="script-body">
+        <div class="ai-suggestions">
+          <span style="font-size:11px;color:var(--text-muted);padding:5px 0;font-weight:500;">Try:</span>
+          <button class="ai-chip" onclick="aiQuickPrompt('product demo walkthrough')">Product demo</button>
+          <button class="ai-chip" onclick="aiQuickPrompt('tutorial explainer for beginners')">Tutorial</button>
+          <button class="ai-chip" onclick="aiQuickPrompt('sales pitch for a SaaS tool')">Sales pitch</button>
+          <button class="ai-chip" onclick="aiQuickPrompt('bug report walkthrough for engineering team')">Bug report</button>
+          <button class="ai-chip" onclick="aiQuickPrompt('weekly team update')">Team update</button>
+        </div>
+        <div class="ai-writer-bar">
+          <input type="text" class="ai-prompt-input" id="aiPrompt"
+            placeholder="Describe your video and AI writes the script..."
+            onkeydown="if(event.key==='Enter')generateScript()" />
+          <button class="btn btn-ai" id="aiGenerateBtn" onclick="generateScript()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg>
+            Write Script
+          </button>
+          <button class="btn-icon" onclick="showAISettings()" title="AI Settings" style="flex-shrink:0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+        <textarea class="script-textarea" id="scriptText" placeholder="Type your script or let AI generate one. It scrolls as a teleprompter while you record." oninput="updateScriptStats()"></textarea>
+        <div class="script-controls">
+          <label style="font-size:12px;color:var(--text-muted);font-weight:500;">Pace:</label>
+          <select class="pace-select" id="paceSelect" onchange="updateScriptStats()">
+            <option value="120">Slow (120 wpm)</option>
+            <option value="150" selected>Normal (150 wpm)</option>
+            <option value="180">Fast (180 wpm)</option>
+          </select>
+          <div class="speed-slider">
+            <label>Scroll:</label>
+            <input type="range" min="0.5" max="4" step="0.1" value="1.5" id="scrollSpeed" />
+            <span id="scrollSpeedLabel">1.5x</span>
+          </div>
+          <button class="btn btn-sm btn-violet" id="teleprompterStartBtn" onclick="toggleTeleprompterPreview()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Start Teleprompter
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slides & Attachments -->
+    <div class="slides-section" id="slidesSection">
+      <div class="slides-header">
+        <h4>Slides & Attachments</h4>
+        <span style="font-size:12px;color:var(--text-muted);font-weight:500;" id="slideCountLabel">0 slides</span>
+      </div>
+      <div class="slides-tabs" id="slidesTabs"></div>
+      <div class="slide-content" id="slideContent">
+        <div class="empty-state" style="padding:24px;" id="noSlidesMsg">
+          <p>Add slides to organize talking points, links, and notes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== LIBRARY PAGE ====== -->
+  <div class="page" id="page-library">
+    <div class="library-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <h3>Library</h3>
+        <span class="video-count" id="videoCount">0 videos</span>
+      </div>
+      <div class="sort-controls">
+        <button class="sort-btn active" data-sort="newest" onclick="sortVideos('newest')">Newest</button>
+        <button class="sort-btn" data-sort="oldest" onclick="sortVideos('oldest')">Oldest</button>
+        <button class="sort-btn" data-sort="name" onclick="sortVideos('name')">Name</button>
+      </div>
+    </div>
+    <div class="folder-bar" id="folderBar"></div>
+    <div class="video-grid" id="videoGrid"></div>
+    <div class="empty-state" id="emptyState">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" opacity=".2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <p>No recordings yet. Hit Record to get started.</p>
+    </div>
+  </div>
+
+  <!-- ====== ANALYTICS PAGE ====== -->
+  <div class="page" id="page-analytics">
+    <h3 style="font-size:18px;font-weight:700;margin-bottom:24px;letter-spacing:-0.3px;">Analytics</h3>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-value" id="statVideos">0</div><div class="stat-label">Videos</div></div>
+      <div class="stat-card"><div class="stat-value" id="statViews">0</div><div class="stat-label">Total Views</div></div>
+      <div class="stat-card"><div class="stat-value" id="statViewers">0</div><div class="stat-label">Unique Viewers</div></div>
+      <div class="stat-card"><div class="stat-value" id="statWatchTime">0m</div><div class="stat-label">Watch Time</div></div>
+    </div>
+    <h4 style="font-size:13px;font-weight:600;margin-bottom:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;">Top Videos</h4>
+    <table class="view-table" style="margin-bottom:32px;">
+      <thead><tr><th>Video</th><th>Views</th><th>Avg. Watched</th><th>Link</th></tr></thead>
+      <tbody id="topVideosTable"></tbody>
+    </table>
+    <h4 style="font-size:13px;font-weight:600;margin-bottom:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;">Recent Views</h4>
+    <table class="view-table">
+      <thead><tr><th>Viewer</th><th>Video</th><th>Watched</th><th>When</th></tr></thead>
+      <tbody id="recentViewsTable"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Teleprompter Overlay -->
+<div class="teleprompter-overlay" id="teleprompterOverlay">
+  <div class="teleprompter-inner">
+    <div class="teleprompter-text" id="teleprompterText"></div>
+  </div>
+</div>
+
+<!-- Slide Overlay -->
+<div class="slide-overlay" id="slideOverlay">
+  <div class="slide-counter" id="slideOverlayCounter"></div>
+  <h3 id="slideOverlayTitle"></h3>
+  <div class="slide-notes" id="slideOverlayNotes"></div>
+  <div class="slide-links-list" id="slideOverlayLinks"></div>
+  <div class="slide-nav">
+    <button onclick="prevSlideOverlay()">Previous</button>
+    <button onclick="nextSlideOverlay()">Next</button>
+  </div>
+</div>
+
+<!-- AI Settings Modal -->
+<div class="modal-overlay" id="aiSettingsModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>AI Settings</h3>
+      <button class="btn-icon" onclick="closeAISettings()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5;">Connect a free AI provider. Your key stays in your browser only.</p>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;font-weight:500;">Provider</label>
+        <select class="pace-select" id="aiProvider" style="width:100%;padding:10px;" onchange="updateProviderHelp()">
+          <option value="groq">Groq (free, no credit card)</option>
+          <option value="openai">OpenAI (paid, ~$0.01/script)</option>
+        </select>
+      </div>
+      <div id="providerHelp" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
+      <input type="password" class="share-link-input" id="aiKeyInput" placeholder="Paste API key..." style="width:100%;margin-bottom:12px;border-radius:8px;" />
+      <p style="font-size:11px;color:var(--text-muted);">No key? Write Script still works with smart templates.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAISettings()">Cancel</button>
+      <button class="btn btn-violet" onclick="saveAIKey()">Save Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share Modal -->
+<div class="modal-overlay" id="shareModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Share Video</h3>
+      <button class="btn-icon" onclick="closeShareModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Anyone with this link can view.</p>
+      <div class="share-link-box">
+        <input type="text" class="share-link-input" id="shareLinkInput" readonly />
+        <button class="btn btn-violet btn-sm" onclick="copyShareLink()">Copy</button>
+      </div>
+      <div class="share-option">
+        <div class="share-option-label">Link active<small>Toggle sharing on/off</small></div>
+        <button class="share-toggle on" id="shareActiveToggle" onclick="toggleShareActive()"></button>
+      </div>
+      <div class="share-option">
+        <div class="share-option-label">Allow download<small>Let viewers save the file</small></div>
+        <button class="share-toggle on" id="shareDownloadToggle" onclick="toggleShareDownload()"></button>
+      </div>
+      <div class="share-option">
+        <div class="share-option-label">Password<small>Require password to view</small></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="text" class="pw-input" id="sharePassword" placeholder="None" />
+          <button class="btn btn-sm btn-secondary" onclick="saveSharePassword()">Set</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeShareModal()">Done</button></div>
+  </div>
+</div>
+
+<!-- Player Modal -->
+<div class="modal-overlay" id="playerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">Video</h3>
+      <button class="btn-icon" onclick="closePlayerModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body"><video id="modalVideo" controls></video></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePlayerModal()">Close</button>
+      <button class="btn btn-violet" id="modalShareBtn" onclick="shareFromModal()">Share</button>
+      <button class="btn btn-accent" id="modalDownload">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Views Modal -->
+<div class="modal-overlay" id="viewsModal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <h3 id="viewsModalTitle">Views</h3>
+      <button class="btn-icon" onclick="closeViewsModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <table class="view-table" style="width:100%;"><thead><tr><th>Viewer</th><th>Watched</th><th>When</th></tr></thead><tbody id="videoViewsTable"></tbody></table>
+      <div id="noViewsMsg" style="text-align:center;color:var(--text-muted);padding:24px;font-size:13px;">No views yet.</div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeViewsModal()">Close</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="webcam-float-preview" id="webcamFloat"><video id="webcamPreview" autoplay muted playsinline></video></div>
+
+<script>
+// ——— State ———
+let mediaRecorder = null;
+let recordedChunks = [];
+let screenStream = null;
+let webcamStream = null;
+let timerInterval = null;
+let seconds = 0;
+let isPaused = false;
+let latestVideoId = null;
+let currentShareVideoId = null;
+let currentModalVideoId = null;
+let teleprompterInterval = null;
+let teleprompterOffset = 0;
+let activeSlideIdx = 0;
+
+let videos = [];
+let folders = ['all'];
+let currentFolder = 'all';
+let currentSort = 'newest';
+
+const options = { webcam: true, audio: true, sysAudio: true, teleprompter: false };
+
+// Slides data
+let slides = [];
+let currentSlideIdx = 0;
+
+const BASE = window.location.origin;
+
+// ——— Page Navigation ———
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
+  if (page === 'library') loadLibrary();
+  if (page === 'analytics') loadAnalytics();
+}
+
+// ——— API helpers ———
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: opts.body && !(opts.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {},
+    ...opts,
+    body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  return res.json();
+}
+
+// ——— Script Stats ———
+function updateScriptStats() {
+  const text = document.getElementById('scriptText').value.trim();
+  const words = text ? text.split(/\s+/).length : 0;
+  const pace = parseInt(document.getElementById('paceSelect').value);
+  const mins = words / pace;
+  document.getElementById('wordCount').textContent = `${words} word${words !== 1 ? 's' : ''}`;
+  document.getElementById('readTime').textContent = mins < 1 ? `~${Math.ceil(mins * 60)}s` : `~${Math.round(mins * 10) / 10} min`;
+}
+
+document.getElementById('scrollSpeed').addEventListener('input', function() {
+  document.getElementById('scrollSpeedLabel').textContent = this.value + 'x';
+});
+
+// ——— AI Script Writer ———
+function getAIKey() { return localStorage.getItem('screencap_ai_key') || ''; }
+function getAIProvider() { return localStorage.getItem('screencap_ai_provider') || 'groq'; }
+
+function aiQuickPrompt(text) {
+  document.getElementById('aiPrompt').value = text;
+  generateScript();
+}
+
+function updateProviderHelp() {
+  const provider = document.getElementById('aiProvider').value;
+  const help = document.getElementById('providerHelp');
+  if (provider === 'groq') {
+    help.innerHTML = 'Free — no credit card needed. Get a key at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent);">console.groq.com/keys</a>';
+  } else {
+    help.innerHTML = 'Paid (~$0.01/script). Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent);">platform.openai.com/api-keys</a>';
+  }
+}
+
+function showAISettings() {
+  const current = getAIKey();
+  const provider = getAIProvider();
+  document.getElementById('aiProvider').value = provider;
+  document.getElementById('aiKeyInput').value = current ? '••••••••' + current.slice(-6) : '';
+  updateProviderHelp();
+  document.getElementById('aiSettingsModal').classList.add('visible');
+}
+
+function closeAISettings() {
+  document.getElementById('aiSettingsModal').classList.remove('visible');
+}
+
+function saveAIKey() {
+  const val = document.getElementById('aiKeyInput').value.trim();
+  const provider = document.getElementById('aiProvider').value;
+  localStorage.setItem('screencap_ai_provider', provider);
+  if (val && !val.startsWith('••')) {
+    localStorage.setItem('screencap_ai_key', val);
+    showToast('API key saved (stored locally only)');
+  } else if (!val) {
+    localStorage.removeItem('screencap_ai_key');
+    showToast('API key removed');
+  }
+  closeAISettings();
+}
+
+async function generateScript() {
+  const prompt = document.getElementById('aiPrompt').value.trim();
+  if (!prompt) { showToast('Describe your video first'); return; }
+
+  const apiKey = getAIKey();
+  if (!apiKey) {
+    generateFromTemplate(prompt);
+    return;
+  }
+
+  const btn = document.getElementById('aiGenerateBtn');
+  const existingScript = document.getElementById('scriptText').value.trim();
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ai-loading"></span> Writing...';
+
+  const provider = getAIProvider();
+  const systemPrompt = `You are a professional video script writer. Write scripts meant to be read aloud as a teleprompter for screen recordings and video presentations.
+
+Rules:
+- Write in a natural, conversational tone — like talking to a colleague
+- Use short sentences. Break ideas into digestible chunks.
+- Include [PAUSE] markers where the speaker should take a breath
+- Start with a strong hook — no "Hey guys" or "Welcome to my video"
+- End with a clear call to action or summary
+- Don't include stage directions, timestamps, or formatting — just the spoken words
+- Aim for 150-500 words depending on topic
+- If there's an existing script, improve/expand it based on the prompt`;
+
+  const userMsg = existingScript
+    ? `Here's my current script:\n\n${existingScript}\n\nUpdate based on: ${prompt}`
+    : `Write a video script for: ${prompt}`;
+
+  const config = provider === 'groq'
+    ? { url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' }
+    : { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' };
+
+  try {
+    const res = await fetch(config.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: config.model,
+        stream: true,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMsg },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let script = '';
+    let buffer = '';
+    document.getElementById('scriptText').value = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+          try {
+            const parsed = JSON.parse(line.slice(6));
+            const text = parsed.choices?.[0]?.delta?.content;
+            if (text) {
+              script += text;
+              document.getElementById('scriptText').value = script;
+              updateScriptStats();
+            }
+          } catch {}
+        }
+      }
+    }
+    showToast('Script ready!');
+  } catch (err) {
+    console.error('AI error:', err);
+    if (err.message.includes('401') || err.message.includes('invalid')) {
+      showToast('Invalid API key — click the gear to update.');
+    } else {
+      showToast('AI error: ' + err.message);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg> Write Script';
+  }
+}
+
+function generateFromTemplate(prompt) {
+  const p = prompt.toLowerCase();
+  let script = '';
+
+  if (p.includes('demo') || p.includes('product') || p.includes('walkthrough')) {
+    script = `Let me show you exactly how this works.\n\n[PAUSE]\n\nFirst, here's the problem we're solving. ${prompt}.\n\n[PAUSE]\n\nNow watch what happens when I...\n\nNotice how quickly that just happened. No extra steps, no confusion.\n\n[PAUSE]\n\nLet me show you one more thing that I think you'll really appreciate.\n\n[PAUSE]\n\nAnd that's it. Clean, fast, and it just works.\n\nIf you want to try this yourself, drop a comment or hit the link below.\n\n[PAUSE]\n\nThanks for watching.`;
+  } else if (p.includes('tutorial') || p.includes('how to') || p.includes('explain')) {
+    script = `Here's exactly how to do this — step by step.\n\n[PAUSE]\n\nStep one: ${prompt}.\n\nLet me walk you through it.\n\n[PAUSE]\n\nStep two: Now that we have that set up, here's what comes next.\n\nPay attention to this part — it's where most people get stuck.\n\n[PAUSE]\n\nStep three: And finally, we bring it all together.\n\n[PAUSE]\n\nHere's a quick recap of what we covered:\n- First, we set things up\n- Then we configured the key parts\n- And finally we tested everything\n\nIf this helped, let me know. Happy to do a deeper dive on any of these steps.\n\n[PAUSE]\n\nThanks for watching.`;
+  } else if (p.includes('sales') || p.includes('pitch') || p.includes('sell')) {
+    script = `What if I told you there's a better way?\n\n[PAUSE]\n\nRight now, you're probably spending way too much time on this. I know because I was too.\n\n[PAUSE]\n\nHere's what changed everything: ${prompt}.\n\n[PAUSE]\n\nThe results speak for themselves. Faster workflow, fewer mistakes, and honestly — it just feels better to use.\n\n[PAUSE]\n\nDon't take my word for it. Try it yourself for free and see the difference in the first five minutes.\n\n[PAUSE]\n\nLink's below. Let's go.`;
+  } else if (p.includes('bug') || p.includes('issue') || p.includes('report')) {
+    script = `I found something we need to look at.\n\n[PAUSE]\n\nHere's what's happening: ${prompt}.\n\nLet me reproduce it so you can see exactly what I mean.\n\n[PAUSE]\n\nWatch this — see that? That shouldn't be happening.\n\n[PAUSE]\n\nHere's what I think is going on, and here's where I'd start looking.\n\n[PAUSE]\n\nI'll drop the details in the ticket. Let me know if you need more context.`;
+  } else if (p.includes('update') || p.includes('standup') || p.includes('team')) {
+    script = `Quick update on where things stand.\n\n[PAUSE]\n\nThis week I focused on: ${prompt}.\n\nHere's what got done.\n\n[PAUSE]\n\nHere's what's still in progress.\n\n[PAUSE]\n\nAnd here's what I need help with — if anyone has context on this, let me know.\n\n[PAUSE]\n\nThat's it. Short and sweet. Talk soon.`;
+  } else {
+    script = `Here's what I want to show you today.\n\n[PAUSE]\n\n${prompt}.\n\nLet me break this down.\n\n[PAUSE]\n\nFirst, the context — why this matters and what led us here.\n\n[PAUSE]\n\nNow here's the interesting part.\n\n[PAUSE]\n\nLet me walk through this in detail so you can see exactly what I mean.\n\n[PAUSE]\n\nAnd here's the key takeaway.\n\n[PAUSE]\n\nIf you found this useful, let me know. Happy to go deeper on any of this.\n\nThanks for watching.`;
+  }
+
+  document.getElementById('scriptText').value = script;
+  updateScriptStats();
+  showToast('Template generated — add an AI key for smarter scripts');
+}
+
+// ——— Slides ———
+function addSlide() {
+  const title = prompt('Slide title:') || `Slide ${slides.length + 1}`;
+  slides.push({ title: title.trim(), notes: '', links: [] });
+  currentSlideIdx = slides.length - 1;
+  renderSlides();
+  saveSlides();
+}
+
+function selectSlide(idx) {
+  currentSlideIdx = idx;
+  renderSlides();
+}
+
+function deleteSlide(idx) {
+  slides.splice(idx, 1);
+  if (currentSlideIdx >= slides.length) currentSlideIdx = Math.max(0, slides.length - 1);
+  renderSlides();
+  saveSlides();
+}
+
+function updateSlideField(field, value) {
+  if (slides[currentSlideIdx]) {
+    slides[currentSlideIdx][field] = value;
+    saveSlides();
+  }
+}
+
+function addSlideLink() {
+  if (slides[currentSlideIdx]) {
+    slides[currentSlideIdx].links.push({ label: '', url: '' });
+    renderSlideContent();
+    saveSlides();
+  }
+}
+
+function updateSlideLink(linkIdx, field, value) {
+  if (slides[currentSlideIdx]?.links[linkIdx]) {
+    slides[currentSlideIdx].links[linkIdx][field] = value;
+    saveSlides();
+  }
+}
+
+function removeSlideLink(linkIdx) {
+  if (slides[currentSlideIdx]) {
+    slides[currentSlideIdx].links.splice(linkIdx, 1);
+    renderSlideContent();
+    saveSlides();
+  }
+}
+
+function renderSlides() {
+  const tabs = document.getElementById('slidesTabs');
+  document.getElementById('slideCountLabel').textContent = `${slides.length} slide${slides.length !== 1 ? 's' : ''}`;
+
+  tabs.innerHTML = '';
+  slides.forEach((s, i) => {
+    const tab = document.createElement('button');
+    tab.className = `slide-tab ${i === currentSlideIdx ? 'active' : ''}`;
+    tab.innerHTML = `${escapeHtml(s.title || 'Untitled')} <span class="slide-num">${i+1}/${slides.length}</span>`;
+    tab.onclick = () => selectSlide(i);
+    tabs.appendChild(tab);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'slide-tab add-slide-btn';
+  addBtn.textContent = '+';
+  addBtn.onclick = addSlide;
+  tabs.appendChild(addBtn);
+
+  renderSlideContent();
+}
+
+function renderSlideContent() {
+  const container = document.getElementById('slideContent');
+  const noMsg = document.getElementById('noSlidesMsg');
+
+  if (slides.length === 0) {
+    container.innerHTML = '';
+    container.appendChild(noMsg || createNoSlidesMsg());
+    return;
+  }
+
+  const s = slides[currentSlideIdx];
+  if (!s) return;
+
+  container.innerHTML = `
+    <input class="slide-title-input" value="${escapeHtml(s.title)}" placeholder="Slide title"
+      oninput="updateSlideField('title', this.value); updateTabLabel(${currentSlideIdx}, this.value)" />
+    <textarea class="slide-notes-input" placeholder="Talking points, notes, bullet points..."
+      oninput="updateSlideField('notes', this.value)">${escapeHtml(s.notes)}</textarea>
+    <div class="slide-links">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:12px;color:var(--text-muted);font-weight:500;">Attachments & Links</span>
+        <button class="btn btn-sm btn-secondary" onclick="addSlideLink()">+ Add Link</button>
+      </div>
+      ${s.links.map((l, i) => `
+        <div class="slide-link-row">
+          <input placeholder="Label" value="${escapeHtml(l.label)}" oninput="updateSlideLink(${i},'label',this.value)" />
+          <input placeholder="URL or file path" value="${escapeHtml(l.url)}" oninput="updateSlideLink(${i},'url',this.value)" />
+          ${l.url ? `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;" title="Open link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>` : ''}
+          <button onclick="removeSlideLink(${i})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      `).join('')}
+    </div>
+    <div class="slide-actions">
+      <button class="btn btn-sm btn-secondary" style="color:var(--red);" onclick="deleteSlide(${currentSlideIdx})">Delete Slide</button>
+      <div style="display:flex;gap:8px;">
+        ${currentSlideIdx > 0 ? `<button class="btn btn-sm btn-secondary" onclick="moveSlide(-1)">Move Left</button>` : ''}
+        ${currentSlideIdx < slides.length - 1 ? `<button class="btn btn-sm btn-secondary" onclick="moveSlide(1)">Move Right</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function updateTabLabel(idx, value) {
+  const tabs = document.querySelectorAll('.slide-tab:not(.add-slide-btn)');
+  if (tabs[idx]) tabs[idx].innerHTML = `${escapeHtml(value || 'Untitled')} <span class="slide-num">${idx+1}/${slides.length}</span>`;
+}
+
+function moveSlide(dir) {
+  const newIdx = currentSlideIdx + dir;
+  if (newIdx < 0 || newIdx >= slides.length) return;
+  [slides[currentSlideIdx], slides[newIdx]] = [slides[newIdx], slides[currentSlideIdx]];
+  currentSlideIdx = newIdx;
+  renderSlides();
+  saveSlides();
+}
+
+function createNoSlidesMsg() {
+  const div = document.createElement('div');
+  div.className = 'empty-state';
+  div.id = 'noSlidesMsg';
+  div.style.padding = '24px';
+  div.innerHTML = '<p>Add slides to organize your talking points, links, and notes.</p>';
+  return div;
+}
+
+function saveSlides() { localStorage.setItem('screencap_slides', JSON.stringify(slides)); }
+function loadSlides() {
+  try { slides = JSON.parse(localStorage.getItem('screencap_slides') || '[]'); } catch { slides = []; }
+  renderSlides();
+}
+
+// ——— Teleprompter ———
+let teleprompterRunning = false;
+let teleprompterStandalone = false;
+
+function startTeleprompter() {
+  const text = document.getElementById('scriptText').value.trim();
+  if (!text) { showToast('Write a script first'); return; }
+
+  const overlay = document.getElementById('teleprompterOverlay');
+  const textEl = document.getElementById('teleprompterText');
+  textEl.textContent = text;
+  textEl.style.transform = 'translateY(0)';
+  teleprompterOffset = 0;
+  overlay.classList.add('visible');
+  teleprompterRunning = true;
+
+  const speed = parseFloat(document.getElementById('scrollSpeed').value);
+  teleprompterInterval = setInterval(() => {
+    if (isPaused && !teleprompterStandalone) return;
+    teleprompterOffset += speed;
+    textEl.style.transform = `translateY(-${teleprompterOffset}px)`;
+  }, 50);
+
+  updateTeleprompterBtn();
+}
+
+function stopTeleprompter() {
+  clearInterval(teleprompterInterval);
+  teleprompterRunning = false;
+  teleprompterStandalone = false;
+  updateTeleprompterBtn();
+  document.getElementById('teleprompterOverlay').classList.remove('visible');
+}
+
+function toggleTeleprompterPreview() {
+  if (teleprompterRunning) {
+    stopTeleprompter();
+  } else {
+    teleprompterStandalone = true;
+    startTeleprompter();
+  }
+}
+
+function updateTeleprompterBtn() {
+  const btn = document.getElementById('teleprompterStartBtn');
+  if (!btn) return;
+  if (teleprompterRunning) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop Teleprompter';
+    btn.classList.remove('btn-violet');
+    btn.classList.add('btn-primary');
+  } else {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Start Teleprompter';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-violet');
+  }
+}
+
+// ——— Slide Overlay During Recording ———
+function showSlideOverlay() {
+  if (slides.length === 0) return;
+  activeSlideIdx = 0;
+  updateSlideOverlay();
+  document.getElementById('slideOverlay').classList.add('visible');
+}
+
+function hideSlideOverlay() {
+  document.getElementById('slideOverlay').classList.remove('visible');
+}
+
+function updateSlideOverlay() {
+  const s = slides[activeSlideIdx];
+  if (!s) return;
+  document.getElementById('slideOverlayCounter').textContent = `${activeSlideIdx + 1} / ${slides.length}`;
+  document.getElementById('slideOverlayTitle').textContent = s.title;
+  document.getElementById('slideOverlayNotes').textContent = s.notes;
+  document.getElementById('slideOverlayLinks').innerHTML = s.links
+    .filter(l => l.url)
+    .map(l => `<a href="${escapeHtml(l.url)}" target="_blank">${escapeHtml(l.label || l.url)}</a>`)
+    .join('');
+}
+
+function prevSlideOverlay() {
+  if (activeSlideIdx > 0) { activeSlideIdx--; updateSlideOverlay(); }
+}
+
+function nextSlideOverlay() {
+  if (activeSlideIdx < slides.length - 1) { activeSlideIdx++; updateSlideOverlay(); }
+}
+
+// ——— Load Library ———
+async function loadLibrary() {
+  videos = await api('/api/videos');
+  const foldersData = await api('/api/folders');
+  folders = foldersData.includes('all') ? foldersData : ['all', ...foldersData];
+  renderFolders();
+  renderVideos();
+}
+
+// ——— Load Analytics ———
+async function loadAnalytics() {
+  const stats = await api('/api/stats');
+  document.getElementById('statVideos').textContent = stats.totalVideos;
+  document.getElementById('statViews').textContent = stats.totalViews;
+  document.getElementById('statViewers').textContent = stats.uniqueViewers;
+  const mins = Math.floor(stats.totalWatchTime / 60);
+  document.getElementById('statWatchTime').textContent = mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h ${mins%60}m`;
+
+  document.getElementById('topVideosTable').innerHTML = stats.topVideos.map(v => `
+    <tr><td>${escapeHtml(v.title)}</td><td>${v.views}</td>
+    <td><span class="pct-bar"><span class="pct-bar-fill" style="width:${Math.round(v.avg_watch_pct)}%"></span></span>${Math.round(v.avg_watch_pct)}%</td>
+    <td><code style="font-size:11px;color:var(--text-muted);font-family:'SF Mono',monospace;">/s/${v.share_id}</code></td></tr>
+  `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No data yet</td></tr>';
+
+  document.getElementById('recentViewsTable').innerHTML = stats.recentViews.map(v => `
+    <tr><td>${escapeHtml(v.viewer_name || 'Anonymous')}</td><td>${escapeHtml(v.video_title)}</td>
+    <td><span class="pct-bar"><span class="pct-bar-fill" style="width:${Math.round(v.total_percent)}%"></span></span>${Math.round(v.total_percent)}%</td>
+    <td style="color:var(--text-muted);font-size:12px;">${timeAgo(v.viewed_at)}</td></tr>
+  `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No views yet</td></tr>';
+}
+
+// ——— Recording ———
+async function startRecording() {
+  try {
+    const displayOpts = { video: { cursor: 'always' } };
+    if (options.sysAudio) displayOpts.audio = true;
+    screenStream = await navigator.mediaDevices.getDisplayMedia(displayOpts);
+
+    const tracks = [...screenStream.getVideoTracks()];
+    const audioCtx = new AudioContext();
+    const dest = audioCtx.createMediaStreamDestination();
+    let hasAudio = false;
+
+    if (screenStream.getAudioTracks().length > 0) {
+      audioCtx.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())).connect(dest);
+      hasAudio = true;
+    }
+    if (options.audio) {
+      try { const mic = await navigator.mediaDevices.getUserMedia({ audio: true }); audioCtx.createMediaStreamSource(mic).connect(dest); hasAudio = true; } catch {}
+    }
+    if (hasAudio) tracks.push(...dest.stream.getAudioTracks());
+
+    if (options.webcam) {
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        document.getElementById('webcamPreview').srcObject = webcamStream;
+        document.getElementById('webcamFloat').classList.add('visible');
+      } catch (camErr) {
+        console.warn('Webcam error:', camErr);
+        showToast('Webcam not available — recording without it');
+      }
+    }
+
+    const combined = new MediaStream(tracks);
+    mediaRecorder = new MediaRecorder(combined, { mimeType: getSupportedMime() });
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = onRecordingStop;
+    screenStream.getVideoTracks()[0].onended = () => { if (mediaRecorder?.state !== 'inactive') stopRecording(); };
+
+    mediaRecorder.start(200);
+    showPage('record');
+    document.getElementById('recordPanel').style.display = 'none';
+    document.getElementById('recordingActive').classList.add('visible');
+    document.getElementById('previewContainer').classList.remove('visible');
+    document.getElementById('previewActions').style.display = 'none';
+
+    seconds = 0; isPaused = false;
+    updateTimer();
+    timerInterval = setInterval(() => { if (!isPaused) { seconds++; updateTimer(); } }, 1000);
+
+    if (options.teleprompter) startTeleprompter();
+    if (slides.length > 0) showSlideOverlay();
+
+  } catch (err) {
+    console.error('Recording error:', err);
+    if (err.name === 'NotAllowedError') {
+      showToast('Screen sharing was cancelled');
+    } else if (err.name === 'NotSupportedError') {
+      showToast('Screen recording not supported on this device');
+    } else {
+      showToast('Recording failed: ' + err.message);
+    }
+  }
+}
+
+function getSupportedMime() {
+  for (const t of ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+function togglePause() {
+  if (!mediaRecorder) return;
+  if (isPaused) {
+    mediaRecorder.resume(); isPaused = false;
+    document.getElementById('recDot').classList.remove('paused');
+    document.getElementById('recStatus').textContent = 'Recording';
+    document.getElementById('pauseBtn').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+  } else {
+    mediaRecorder.pause(); isPaused = true;
+    document.getElementById('recDot').classList.add('paused');
+    document.getElementById('recStatus').textContent = 'Paused';
+    document.getElementById('pauseBtn').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume';
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
+  clearInterval(timerInterval);
+  screenStream?.getTracks().forEach(t => t.stop());
+  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); document.getElementById('webcamFloat').classList.remove('visible'); }
+  document.getElementById('recordingActive').classList.remove('visible');
+  stopTeleprompter();
+  hideSlideOverlay();
+}
+
+async function onRecordingStop() {
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const now = new Date();
+  const title = `Recording ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  const localUrl = URL.createObjectURL(blob);
+  document.getElementById('previewVideo').src = localUrl;
+  document.getElementById('previewContainer').classList.add('visible');
+  document.getElementById('previewActions').style.display = 'flex';
+  document.getElementById('recordPanel').style.display = 'none';
+
+  showToast('Uploading...');
+
+  try {
+    const sig = await api('/api/upload-sig');
+
+    const cloudForm = new FormData();
+    cloudForm.append('file', blob);
+    cloudForm.append('timestamp', sig.timestamp);
+    cloudForm.append('signature', sig.signature);
+    cloudForm.append('api_key', sig.apiKey);
+    cloudForm.append('folder', sig.folder);
+    cloudForm.append('resource_type', 'video');
+
+    const cloudRes = await fetch(
+      `https://api.cloudinary.com/v1_1/${sig.cloudName}/video/upload`,
+      { method: 'POST', body: cloudForm }
+    );
+    const cloudData = await cloudRes.json();
+
+    if (!cloudData.secure_url) throw new Error(cloudData.error?.message || 'Upload failed');
+
+    const result = await api('/api/videos', {
+      method: 'POST',
+      body: {
+        title,
+        duration: seconds,
+        folder: currentFolder === 'all' ? 'all' : currentFolder,
+        cloudinaryUrl: cloudData.secure_url,
+        fileSize: blob.size
+      }
+    });
+
+    latestVideoId = result.id;
+    showToast('Saved!');
+    loadLibrary();
+  } catch (err) {
+    console.error('Upload error:', err);
+    showToast('Upload failed: ' + err.message);
+  }
+}
+
+function downloadLatest() {
+  if (!latestVideoId) return;
+  downloadVideo(latestVideoId, 'recording');
+}
+
+function shareLatest() { if (latestVideoId) openShareModal(latestVideoId); }
+
+function dismissPreview() {
+  document.getElementById('previewContainer').classList.remove('visible');
+  document.getElementById('previewActions').style.display = 'none';
+  document.getElementById('recordPanel').style.display = '';
+}
+
+function updateTimer() {
+  const m = Math.floor(seconds/60).toString().padStart(2,'0');
+  const s = (seconds%60).toString().padStart(2,'0');
+  document.getElementById('timer').textContent = `${m}:${s}`;
+}
+
+function toggleOption(key) {
+  options[key] = !options[key];
+  const map = { webcam: 'toggleWebcam', audio: 'toggleAudio', sysAudio: 'toggleSysAudio', teleprompter: 'toggleTeleprompter' };
+  document.getElementById(map[key]).classList.toggle('active', options[key]);
+}
+
+// ——— Folders ———
+async function createFolder() {
+  const name = prompt('Folder name:');
+  if (!name?.trim()) return;
+  await api('/api/folders', { method: 'POST', body: { name: name.trim() } });
+  loadLibrary();
+}
+
+function selectFolder(name) {
+  currentFolder = name;
+  document.querySelectorAll('.folder-tab').forEach(t => t.classList.toggle('active', t.dataset.folder === name));
+  renderVideos();
+}
+
+function renderFolders() {
+  const bar = document.getElementById('folderBar');
+  bar.innerHTML = '';
+  folders.forEach(f => {
+    const count = f === 'all' ? videos.length : videos.filter(v => v.folder === f).length;
+    const btn = document.createElement('button');
+    btn.className = `folder-tab ${f === currentFolder ? 'active' : ''}`;
+    btn.dataset.folder = f;
+    btn.onclick = () => selectFolder(f);
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${f === 'all' ? '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>' : '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'}</svg> ${f === 'all' ? 'All Videos' : escapeHtml(f)} <span class="folder-count">${count}</span>`;
+    if (f !== 'all') {
+      btn.oncontextmenu = async (e) => {
+        e.preventDefault();
+        if (confirm(`Delete folder "${f}"?`)) {
+          await api(`/api/folders/${encodeURIComponent(f)}`, { method: 'DELETE' });
+          if (currentFolder === f) currentFolder = 'all';
+          loadLibrary();
+        }
+      };
+    }
+    bar.appendChild(btn);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.className = 'folder-tab add-folder-btn';
+  addBtn.onclick = createFolder;
+  addBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Folder';
+  bar.appendChild(addBtn);
+}
+
+// ——— Render Videos ———
+function sortVideos(mode) {
+  currentSort = mode;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === mode));
+  renderVideos();
+}
+
+function getFiltered() {
+  let f = currentFolder === 'all' ? [...videos] : videos.filter(v => v.folder === currentFolder);
+  if (currentSort === 'newest') f.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  else if (currentSort === 'oldest') f.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+  else f.sort((a,b) => a.title.localeCompare(b.title));
+  return f;
+}
+
+function renderVideos() {
+  const grid = document.getElementById('videoGrid');
+  const empty = document.getElementById('emptyState');
+  const filtered = getFiltered();
+  document.getElementById('videoCount').textContent = `${videos.length} video${videos.length !== 1 ? 's' : ''}`;
+
+  if (filtered.length === 0) { grid.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  grid.innerHTML = '';
+
+  filtered.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'video-card';
+    card.innerHTML = `
+      <div class="video-thumb" onclick="playVideo('${v.id}')">
+        <video src="/api/videos/${v.id}/stream" preload="metadata"></video>
+        <div class="video-duration">${formatDuration(v.duration)}</div>
+        ${v.view_count > 0 ? `<div class="video-views-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>${v.view_count}</div>` : ''}
+        ${v.is_shared ? '<div class="shared-badge">Shared</div>' : ''}
+      </div>
+      <div class="video-info">
+        <input class="video-title-input" value="${escapeHtml(v.title)}" onblur="renameVideo('${v.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
+        <div class="video-meta">
+          <span class="video-date">${new Date(v.created_at).toLocaleDateString()}</span>
+          <div class="video-actions">
+            <button title="View tracking" onclick="event.stopPropagation();showVideoViews('${v.id}','${escapeHtml(v.title)}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button title="Share" class="${v.is_shared ? 'active-share' : ''}" onclick="event.stopPropagation();openShareModal('${v.id}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            </button>
+            <button title="Move" onclick="event.stopPropagation();showMoveMenu('${v.id}',this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button title="Download" onclick="event.stopPropagation();downloadVideo('${v.id}','${escapeHtml(v.title)}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+            <button class="delete" title="Delete" onclick="event.stopPropagation();deleteVideo('${v.id}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;
+    const thumb = card.querySelector('.video-thumb video');
+    card.querySelector('.video-thumb').addEventListener('mouseenter', () => { thumb.currentTime = 0; thumb.play().catch(()=>{}); });
+    card.querySelector('.video-thumb').addEventListener('mouseleave', () => { thumb.pause(); thumb.currentTime = 0; });
+    grid.appendChild(card);
+  });
+}
+
+// ——— Video Actions ———
+function playVideo(id) {
+  const v = videos.find(v => v.id === id);
+  if (!v) return;
+  currentModalVideoId = id;
+  document.getElementById('modalTitle').textContent = v.title;
+  document.getElementById('modalVideo').src = `/api/videos/${id}/stream`;
+  document.getElementById('modalDownload').onclick = () => downloadVideo(id, v.title);
+  document.getElementById('playerModal').classList.add('visible');
+}
+function closePlayerModal() {
+  document.getElementById('playerModal').classList.remove('visible');
+  const vid = document.getElementById('modalVideo'); vid.pause(); vid.src = '';
+}
+function shareFromModal() { closePlayerModal(); if (currentModalVideoId) openShareModal(currentModalVideoId); }
+async function renameVideo(id, title) { if (!title?.trim()) return; await api(`/api/videos/${id}`, { method: 'PATCH', body: { title: title.trim() } }); }
+async function deleteVideo(id) { if (!confirm('Delete this recording?')) return; await api(`/api/videos/${id}`, { method: 'DELETE' }); loadLibrary(); showToast('Video deleted'); }
+async function downloadVideo(id, title) {
+  showToast('Preparing download...');
+  try {
+    const res = await fetch(`/api/videos/${id}/stream`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(title||'recording').replace(/[^a-zA-Z0-9 _-]/g,'')}.webm`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Downloading!');
+  } catch (err) {
+    console.error('Download error:', err);
+    showToast('Download failed');
+  }
+}
+
+// ——— Move Menu ———
+let activeMoveMenu = null;
+function showMoveMenu(videoId, btn) {
+  closeMoveMenu();
+  const rect = btn.getBoundingClientRect();
+  const dd = document.createElement('div');
+  dd.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;z-index:50;min-width:160px;box-shadow:0 12px 32px rgba(0,0,0,.5);backdrop-filter:blur(16px);`;
+  folders.forEach(f => {
+    const b = document.createElement('button');
+    b.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:transparent;color:var(--text);font-size:13px;border-radius:6px;cursor:pointer;font-family:Inter,sans-serif;';
+    b.textContent = f === 'all' ? 'All Videos' : f;
+    b.onmouseover = () => b.style.background = 'var(--surface-hover)';
+    b.onmouseout = () => b.style.background = 'transparent';
+    b.onclick = async () => { await api(`/api/videos/${videoId}`, { method: 'PATCH', body: { folder: f } }); closeMoveMenu(); loadLibrary(); showToast(`Moved to ${f === 'all' ? 'All Videos' : f}`); };
+    dd.appendChild(b);
+  });
+  document.body.appendChild(dd);
+  activeMoveMenu = dd;
+  setTimeout(() => document.addEventListener('click', closeMoveMenu, { once: true }), 10);
+}
+function closeMoveMenu() { if (activeMoveMenu) { activeMoveMenu.remove(); activeMoveMenu = null; } }
+
+// ——— Share Modal ———
+async function openShareModal(videoId) {
+  currentShareVideoId = videoId;
+  let vid = videos.find(v => v.id === videoId);
+  if (!vid) { await loadLibrary(); vid = videos.find(v => v.id === videoId); }
+  if (!vid) return;
+  if (!vid.is_shared) { await api(`/api/videos/${videoId}`, { method: 'PATCH', body: { is_shared: 1 } }); vid.is_shared = 1; }
+  document.getElementById('shareLinkInput').value = `${BASE}/s/${vid.share_id}`;
+  document.getElementById('shareActiveToggle').classList.toggle('on', !!vid.is_shared);
+  document.getElementById('shareDownloadToggle').classList.toggle('on', vid.allow_download !== 0);
+  document.getElementById('sharePassword').value = vid.share_password || '';
+  document.getElementById('shareModal').classList.add('visible');
+}
+function closeShareModal() { document.getElementById('shareModal').classList.remove('visible'); loadLibrary(); }
+function copyShareLink() { navigator.clipboard.writeText(document.getElementById('shareLinkInput').value); showToast('Link copied!'); }
+async function toggleShareActive() { const t = document.getElementById('shareActiveToggle'); const on = t.classList.toggle('on'); await api(`/api/videos/${currentShareVideoId}`, { method: 'PATCH', body: { is_shared: on ? 1 : 0 } }); }
+async function toggleShareDownload() { const t = document.getElementById('shareDownloadToggle'); const on = t.classList.toggle('on'); await api(`/api/videos/${currentShareVideoId}`, { method: 'PATCH', body: { allow_download: on ? 1 : 0 } }); }
+async function saveSharePassword() { const pw = document.getElementById('sharePassword').value; await api(`/api/videos/${currentShareVideoId}`, { method: 'PATCH', body: { share_password: pw || null } }); showToast(pw ? 'Password set' : 'Password removed'); }
+
+// ——— Views Modal ———
+async function showVideoViews(videoId, title) {
+  document.getElementById('viewsModalTitle').textContent = `Views: ${title}`;
+  const views = await api(`/api/videos/${videoId}/views`);
+  const tbody = document.getElementById('videoViewsTable');
+  const noMsg = document.getElementById('noViewsMsg');
+  if (views.length === 0) { tbody.innerHTML = ''; noMsg.style.display = ''; }
+  else {
+    noMsg.style.display = 'none';
+    tbody.innerHTML = views.map(v => `<tr><td>${escapeHtml(v.viewer_name || 'Anonymous')}</td>
+      <td><span class="pct-bar"><span class="pct-bar-fill" style="width:${Math.round(v.total_percent)}%"></span></span>${Math.round(v.total_percent)}%</td>
+      <td style="color:var(--text-muted);font-size:12px;">${timeAgo(v.viewed_at)}</td></tr>`).join('');
+  }
+  document.getElementById('viewsModal').classList.add('visible');
+}
+function closeViewsModal() { document.getElementById('viewsModal').classList.remove('visible'); }
+
+// ——— Helpers ———
+function formatDuration(secs) { return `${Math.floor(secs/60).toString().padStart(2,'0')}:${(secs%60).toString().padStart(2,'0')}`; }
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+function timeAgo(dateStr) {
+  const diff = (Date.now() - new Date(dateStr + 'Z').getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('visible'); setTimeout(() => t.classList.remove('visible'), 2500); }
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape') { closePlayerModal(); closeShareModal(); closeViewsModal(); }
+  if (document.getElementById('slideOverlay').classList.contains('visible')) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSlideOverlay();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSlideOverlay();
+  }
+});
+
+// ——— Init ———
+loadLibrary();
+loadSlides();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+node_modules
+.vercel
+uploads
+screencap.db
+screencap.db-wal
+screencap.db-shm
+server.log
+.env
+.env.local
+.env*.local
