@@ -296,6 +296,7 @@
       .record-panel h2 { font-size: 24px; }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -750,6 +751,23 @@ function handleBgUpload(e) {
   img.src = URL.createObjectURL(file);
 }
 
+let selfieSegmentation = null;
+let latestSegmentationMask = null;
+let segOffscreen = null;
+let segOffCtx = null;
+
+async function initSegmentation() {
+  if (selfieSegmentation) return;
+  selfieSegmentation = new SelfieSegmentation({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+  });
+  selfieSegmentation.setOptions({ modelSelection: 1, selfieMode: true });
+  selfieSegmentation.onResults((results) => {
+    latestSegmentationMask = results.segmentationMask;
+  });
+  await selfieSegmentation.initialize();
+}
+
 function startWebcamCanvas() {
   if (webcamBgMode === 'none') return;
   const video = document.getElementById('webcamPreview');
@@ -759,6 +777,24 @@ function startWebcamCanvas() {
   video.style.display = 'none';
   canvas.style.display = 'block';
 
+  // Init segmentation in background
+  initSegmentation().then(() => {
+    sendFrameForSegmentation(video);
+  });
+
+  // Send frames to MediaPipe at ~15fps (separate from render loop)
+  let segInterval = null;
+  function sendFrameForSegmentation(vid) {
+    if (segInterval) clearInterval(segInterval);
+    segInterval = setInterval(async () => {
+      if (!webcamStream || webcamBgMode === 'none' || !selfieSegmentation) return;
+      if (vid.videoWidth === 0) return;
+      try { await selfieSegmentation.send({ image: vid }); } catch (e) {}
+    }, 66); // ~15fps for segmentation
+    // Store interval so we can clear it on stop
+    canvas._segInterval = segInterval;
+  }
+
   function drawFrame() {
     if (!webcamStream || webcamBgMode === 'none') { stopWebcamCanvas(); return; }
     const w = video.videoWidth || 320;
@@ -766,40 +802,57 @@ function startWebcamCanvas() {
     canvas.width = w;
     canvas.height = h;
 
-    if (webcamBgMode === 'blur') {
-      // Draw blurred background
-      ctx.filter = 'blur(12px)';
-      ctx.drawImage(video, 0, 0, w, h);
-      ctx.filter = 'none';
-      // Draw sharp center circle
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.42, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(video, 0, 0, w, h);
-      ctx.restore();
-    } else if (webcamBgMode === 'image' && webcamBgImage) {
-      // Draw custom background image
-      const imgRatio = webcamBgImage.width / webcamBgImage.height;
-      const canvasRatio = w / h;
-      let sx = 0, sy = 0, sw = webcamBgImage.width, sh = webcamBgImage.height;
-      if (imgRatio > canvasRatio) {
-        sw = webcamBgImage.height * canvasRatio;
-        sx = (webcamBgImage.width - sw) / 2;
-      } else {
-        sh = webcamBgImage.width / canvasRatio;
-        sy = (webcamBgImage.height - sh) / 2;
+    if (latestSegmentationMask) {
+      // Create offscreen canvas for compositing if needed
+      if (!segOffscreen || segOffscreen.width !== w || segOffscreen.height !== h) {
+        segOffscreen = document.createElement('canvas');
+        segOffscreen.width = w;
+        segOffscreen.height = h;
+        segOffCtx = segOffscreen.getContext('2d');
       }
-      ctx.drawImage(webcamBgImage, sx, sy, sw, sh, 0, 0, w, h);
-      // Draw person in center circle
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.42, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
+
+      if (webcamBgMode === 'blur') {
+        // Draw blurred full frame as background
+        ctx.filter = 'blur(14px)';
+        ctx.drawImage(video, 0, 0, w, h);
+        ctx.filter = 'none';
+
+        // Draw sharp person using segmentation mask as alpha
+        segOffCtx.clearRect(0, 0, w, h);
+        segOffCtx.drawImage(latestSegmentationMask, 0, 0, w, h);
+        segOffCtx.globalCompositeOperation = 'source-in';
+        segOffCtx.drawImage(video, 0, 0, w, h);
+        segOffCtx.globalCompositeOperation = 'source-over';
+
+        // Composite person on top of blurred background
+        ctx.drawImage(segOffscreen, 0, 0, w, h);
+
+      } else if (webcamBgMode === 'image' && webcamBgImage) {
+        // Draw custom background image (cover fit)
+        const imgRatio = webcamBgImage.width / webcamBgImage.height;
+        const canvasRatio = w / h;
+        let sx = 0, sy = 0, sw = webcamBgImage.width, sh = webcamBgImage.height;
+        if (imgRatio > canvasRatio) {
+          sw = webcamBgImage.height * canvasRatio;
+          sx = (webcamBgImage.width - sw) / 2;
+        } else {
+          sh = webcamBgImage.width / canvasRatio;
+          sy = (webcamBgImage.height - sh) / 2;
+        }
+        ctx.drawImage(webcamBgImage, sx, sy, sw, sh, 0, 0, w, h);
+
+        // Draw person using segmentation mask
+        segOffCtx.clearRect(0, 0, w, h);
+        segOffCtx.drawImage(latestSegmentationMask, 0, 0, w, h);
+        segOffCtx.globalCompositeOperation = 'source-in';
+        segOffCtx.drawImage(video, 0, 0, w, h);
+        segOffCtx.globalCompositeOperation = 'source-over';
+
+        ctx.drawImage(segOffscreen, 0, 0, w, h);
+      }
+    } else {
+      // Fallback while segmentation is loading: just show the video
       ctx.drawImage(video, 0, 0, w, h);
-      ctx.restore();
     }
 
     webcamCanvasRAF = requestAnimationFrame(drawFrame);
@@ -812,6 +865,8 @@ function stopWebcamCanvas() {
   if (webcamCanvasRAF) { cancelAnimationFrame(webcamCanvasRAF); webcamCanvasRAF = null; }
   const video = document.getElementById('webcamPreview');
   const canvas = document.getElementById('webcamCanvas');
+  if (canvas._segInterval) { clearInterval(canvas._segInterval); canvas._segInterval = null; }
+  latestSegmentationMask = null;
   video.style.display = '';
   canvas.style.display = 'none';
 }
