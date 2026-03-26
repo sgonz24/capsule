@@ -1373,14 +1373,18 @@ async function deleteVideo(id) { if (!confirm('Delete this recording?')) return;
 async function downloadVideo(id, title) {
   showToast('Preparing download...');
   try {
-    const res = await fetch(`/api/videos/${id}/stream`);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+    const meta = await api(`/api/videos/${id}`);
+    const cloudUrl = meta.blob_url;
+    if (!cloudUrl) throw new Error('No video URL found');
+
+    // Add fl_attachment to Cloudinary URL to force download
+    const dlUrl = cloudUrl.replace('/upload/', '/upload/fl_attachment/');
     const a = document.createElement('a');
-    a.href = url;
+    a.href = dlUrl;
     a.download = `${(title||'recording').replace(/[^a-zA-Z0-9 _-]/g,'')}.webm`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
     showToast('Downloading!');
   } catch (err) {
     console.error('Download error:', err);

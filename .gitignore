@@ -8,3 +8,4 @@ server.log
 .env
 .env.local
 .env*.local
+._*
