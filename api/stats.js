@@ -1,6 +1,9 @@
-const { getDb } = require('./_db');
+const { getDb, requireAdmin, securityHeaders } = require('./_db');
 
 module.exports = async function handler(req, res) {
+  securityHeaders(res);
+  if (!requireAdmin(req, res)) return;
+
   const sql = getDb();
 
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
@@ -21,7 +24,8 @@ module.exports = async function handler(req, res) {
   `;
 
   const recentViews = await sql`
-    SELECT vw.*, v.title as video_title
+    SELECT vw.id, vw.video_id, vw.viewer_name, vw.watch_duration,
+      vw.total_percent, vw.viewed_at, v.title as video_title
     FROM views vw
     JOIN videos v ON vw.video_id = v.id
     ORDER BY vw.viewed_at DESC

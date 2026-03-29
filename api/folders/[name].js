@@ -1,6 +1,9 @@
-const { getDb } = require('../_db');
+const { getDb, requireAdmin, securityHeaders } = require('../_db');
 
 module.exports = async function handler(req, res) {
+  securityHeaders(res);
+  if (!requireAdmin(req, res)) return;
+
   const sql = getDb();
   const { name } = req.query;
 

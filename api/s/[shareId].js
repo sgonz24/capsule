@@ -1,6 +1,7 @@
-const { getDb } = require('../_db');
+const { getDb, verifyPassword, securityHeaders } = require('../_db');
 
 module.exports = async function handler(req, res) {
+  securityHeaders(res);
   const sql = getDb();
   const { shareId } = req.query;
 
@@ -18,19 +19,43 @@ module.exports = async function handler(req, res) {
   }
 
   if (video.share_password) {
-    const pw = req.query.pw;
-    if (pw !== video.share_password) {
+    let pw = null;
+
+    if (req.method === 'POST') {
+      // Parse URL-encoded form body
+      const body = await parseFormBody(req);
+      pw = body.pw;
+    } else {
+      // Support legacy GET ?pw= links during transition
+      pw = req.query.pw;
+    }
+
+    if (!pw || !verifyPassword(pw, video.share_password)) {
       res.setHeader('Content-Type', 'text/html');
       return res.send(passwordPage(shareId));
     }
   }
 
   res.setHeader('Content-Type', 'text/html');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src https://*.cloudinary.com; connect-src 'self'");
   res.send(sharePage(video));
 };
 
+function parseFormBody(req) {
+  return new Promise((resolve) => {
+    if (req.body && typeof req.body === 'object') return resolve(req.body);
+    let data = '';
+    req.on('data', chunk => { data += chunk; if (data.length > 1000) req.destroy(); });
+    req.on('end', () => {
+      const params = new URLSearchParams(data);
+      resolve(Object.fromEntries(params));
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
 function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function fmtDur(secs) {
@@ -42,7 +67,7 @@ function errorPage(msg) {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>body{font-family:'Inter',sans-serif;background:#09090b;color:#fafafa;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;-webkit-font-smoothing:antialiased;}
 .box{text-align:center;padding:40px;}.box h1{font-size:56px;font-weight:700;margin-bottom:8px;letter-spacing:-2px;background:linear-gradient(to right,#fff,rgba(255,255,255,.4));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}.box p{color:rgba(255,255,255,.45);font-size:15px;}</style></head>
-<body><div class="box"><h1>404</h1><p>${msg}</p></div></body></html>`;
+<body><div class="box"><h1>404</h1><p>${esc(msg)}</p></div></body></html>`;
 }
 
 function passwordPage(shareId) {
@@ -55,7 +80,7 @@ input:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.15);}
 button{width:100%;padding:11px;background:#8b5cf6;color:white;border:none;border-radius:9999px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s;}
 button:hover{background:#a78bfa;}</style></head>
 <body><div class="box"><h2>Password Required</h2><p>This video is password protected.</p>
-<form method="GET"><input type="password" name="pw" placeholder="Enter password" autofocus/>
+<form method="POST"><input type="password" name="pw" placeholder="Enter password" autofocus/>
 <button type="submit">Watch Video</button></form></div></body></html>`;
 }
 
@@ -101,7 +126,7 @@ body{font-family:'Inter',sans-serif;background:#09090b;color:#fafafa;min-height:
   <div class="prompt" id="namePrompt">
     <h2 style="margin-bottom:4px;">${esc(video.title)}</h2>
     <p style="color:#888;font-size:14px;margin-bottom:20px;">Enter your name to start watching</p>
-    <input type="text" id="viewerName" placeholder="Your name (optional)" autofocus onkeydown="if(event.key==='Enter')startWatching()"/>
+    <input type="text" id="viewerName" placeholder="Your name (optional)" maxlength="100" autofocus onkeydown="if(event.key==='Enter')startWatching()"/>
     <button class="btn-start" onclick="startWatching()" style="margin-top:8px;">&#9654; Watch Video</button>
   </div>
   <div id="playerSection" style="display:none;">
@@ -117,22 +142,22 @@ body{font-family:'Inter',sans-serif;background:#09090b;color:#fafafa;min-height:
   </div>
 </div>
 <script>
-const VIDEO_ID='${video.id}',VIDEO_DURATION=${video.duration};
+var VIDEO_ID=${JSON.stringify(video.id)},VIDEO_DURATION=${parseInt(video.duration)||0};
 function startWatching(){
-  const name=document.getElementById('viewerName').value.trim()||'Anonymous';
+  var name=document.getElementById('viewerName').value.trim().slice(0,100)||'Anonymous';
   document.getElementById('namePrompt').style.display='none';
   document.getElementById('playerSection').style.display='';
   fetch('/api/views',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({video_id:VIDEO_ID,viewer_name:name,watch_duration:0,total_percent:0})});
-  document.getElementById('video').play().catch(()=>{});
-  setInterval(()=>{
-    const v=document.getElementById('video');
+  document.getElementById('video').play().catch(function(){});
+  setInterval(function(){
+    var v=document.getElementById('video');
     if(v.paused)return;
-    const ct=Math.floor(v.currentTime),pct=VIDEO_DURATION>0?Math.min(Math.round(v.currentTime/VIDEO_DURATION*100),100):0;
+    var ct=Math.floor(v.currentTime),pct=VIDEO_DURATION>0?Math.min(Math.round(v.currentTime/VIDEO_DURATION*100),100):0;
     fetch('/api/views',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({video_id:VIDEO_ID,viewer_name:name,watch_duration:ct,total_percent:pct})});
   },30000);
-  document.getElementById('video').addEventListener('ended',()=>{
+  document.getElementById('video').addEventListener('ended',function(){
     fetch('/api/views',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({video_id:VIDEO_ID,viewer_name:name,watch_duration:VIDEO_DURATION,total_percent:100})});
   });

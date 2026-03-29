@@ -1,6 +1,9 @@
-const { getDb } = require('./_db');
+const { getDb, requireAdmin, securityHeaders } = require('./_db');
 
 module.exports = async function handler(req, res) {
+  securityHeaders(res);
+  if (!requireAdmin(req, res)) return;
+
   const sql = getDb();
 
   if (req.method === 'GET') {
@@ -10,9 +13,10 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { name } = req.body;
-    if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+    const safeName = String(name || '').trim().slice(0, 50).replace(/[^a-zA-Z0-9 _-]/g, '');
+    if (!safeName) return res.status(400).json({ error: 'Name required' });
     try {
-      await sql`INSERT INTO folders (name) VALUES (${name.trim()}) ON CONFLICT DO NOTHING`;
+      await sql`INSERT INTO folders (name) VALUES (${safeName}) ON CONFLICT DO NOTHING`;
       return res.json({ ok: true });
     } catch {
       return res.status(409).json({ error: 'Already exists' });

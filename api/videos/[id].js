@@ -1,6 +1,9 @@
-const { getDb } = require('../_db');
+const { getDb, hashPassword, requireAdmin, securityHeaders } = require('../_db');
 
 module.exports = async function handler(req, res) {
+  securityHeaders(res);
+  if (!requireAdmin(req, res)) return;
+
   const sql = getDb();
   const { id } = req.query;
 
@@ -22,12 +25,24 @@ module.exports = async function handler(req, res) {
     if (existing.length === 0) return res.status(404).json({ error: 'Not found' });
 
     const v = existing[0];
+
+    // Hash password if provided, keep existing if not changed
+    let passwordValue = v.share_password;
+    if (body.share_password !== undefined) {
+      passwordValue = body.share_password ? hashPassword(body.share_password) : null;
+    }
+
+    const safeTitle = body.title !== undefined ? String(body.title).slice(0, 200) : v.title;
+    const safeFolder = body.folder !== undefined
+      ? String(body.folder).slice(0, 50).replace(/[^a-zA-Z0-9 _-]/g, '') || 'all'
+      : v.folder;
+
     await sql`
       UPDATE videos SET
-        title = ${body.title ?? v.title},
-        folder = ${body.folder ?? v.folder},
+        title = ${safeTitle},
+        folder = ${safeFolder},
         is_shared = ${body.is_shared ?? v.is_shared},
-        share_password = ${body.share_password !== undefined ? body.share_password : v.share_password},
+        share_password = ${passwordValue},
         share_expires = ${body.share_expires ?? v.share_expires},
         allow_download = ${body.allow_download ?? v.allow_download}
       WHERE id = ${id}
@@ -39,8 +54,6 @@ module.exports = async function handler(req, res) {
     const existing = await sql`SELECT * FROM videos WHERE id = ${id}`;
     if (existing.length === 0) return res.status(404).json({ error: 'Not found' });
 
-    // Note: Cloudinary video remains (cleanup can be done via Cloudinary dashboard)
-    await sql`DELETE FROM views WHERE video_id = ${id}`;
     await sql`DELETE FROM videos WHERE id = ${id}`;
     return res.json({ ok: true });
   }

@@ -1,4 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
+const crypto = require('crypto');
 
 let sql;
 
@@ -50,17 +51,41 @@ async function initDb() {
 }
 
 function generateShareId() {
-  const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
-  let id = '';
-  for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
-  return id;
+  const bytes = crypto.randomBytes(6);
+  return bytes.toString('base64url').slice(0, 8);
 }
 
 function generateId() {
-  const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
-  let id = '';
-  for (let i = 0; i < 12; i++) id += chars[Math.floor(Math.random() * chars.length)];
-  return id;
+  const bytes = crypto.randomBytes(9);
+  return bytes.toString('base64url').slice(0, 12);
 }
 
-module.exports = { getDb, initDb, generateShareId, generateId };
+function hashPassword(plain) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.createHash('sha256').update(salt + plain).digest('hex');
+  return salt + ':' + hash;
+}
+
+function verifyPassword(plain, stored) {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const check = crypto.createHash('sha256').update(salt + plain).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
+}
+
+function requireAdmin(req, res) {
+  const token = process.env.ADMIN_TOKEN;
+  if (!token) return true; // no token configured = no auth enforced
+  const provided = req.headers['x-admin-token'] || req.headers['authorization']?.replace('Bearer ', '');
+  if (provided === token) return true;
+  res.status(401).json({ error: 'Unauthorized' });
+  return false;
+}
+
+function securityHeaders(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+}
+
+module.exports = { getDb, initDb, generateShareId, generateId, hashPassword, verifyPassword, requireAdmin, securityHeaders };

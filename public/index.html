@@ -755,6 +755,8 @@ let selfieSegmentation = null;
 let latestSegmentationMask = null;
 let segOffscreen = null;
 let segOffCtx = null;
+let maskCanvas = null;
+let maskCtx = null;
 
 async function initSegmentation() {
   if (selfieSegmentation) return;
@@ -768,13 +770,40 @@ async function initSegmentation() {
   await selfieSegmentation.initialize();
 }
 
+// Convert the grayscale mask to an alpha mask: luminance → alpha channel
+function getAlphaMask(mask, w, h) {
+  if (!maskCanvas || maskCanvas.width !== w || maskCanvas.height !== h) {
+    maskCanvas = document.createElement('canvas');
+    maskCanvas.width = w;
+    maskCanvas.height = h;
+    maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  maskCtx.drawImage(mask, 0, 0, w, h);
+  const imageData = maskCtx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    // Use red channel as alpha (mask is grayscale: white=person, black=bg)
+    data[i + 3] = data[i]; // alpha = red
+    data[i] = 255;         // set RGB to white (we only care about alpha)
+    data[i + 1] = 255;
+    data[i + 2] = 255;
+  }
+  maskCtx.putImageData(imageData, 0, 0);
+  return maskCanvas;
+}
+
 function startWebcamCanvas() {
   if (webcamBgMode === 'none') return;
   const video = document.getElementById('webcamPreview');
   const canvas = document.getElementById('webcamCanvas');
   const ctx = canvas.getContext('2d');
 
-  video.style.display = 'none';
+  // Keep video in DOM and rendering (display:none stops frame decoding in some browsers)
+  video.style.position = 'absolute';
+  video.style.width = '1px';
+  video.style.height = '1px';
+  video.style.opacity = '0';
+  video.style.pointerEvents = 'none';
   canvas.style.display = 'block';
 
   // Init segmentation in background
@@ -791,7 +820,6 @@ function startWebcamCanvas() {
       if (vid.videoWidth === 0) return;
       try { await selfieSegmentation.send({ image: vid }); } catch (e) {}
     }, 66); // ~15fps for segmentation
-    // Store interval so we can clear it on stop
     canvas._segInterval = segInterval;
   }
 
@@ -811,20 +839,22 @@ function startWebcamCanvas() {
         segOffCtx = segOffscreen.getContext('2d');
       }
 
+      // Convert grayscale mask to proper alpha mask
+      const alphaMask = getAlphaMask(latestSegmentationMask, w, h);
+
+      // Draw the sharp person cutout on offscreen canvas
+      segOffCtx.clearRect(0, 0, w, h);
+      segOffCtx.drawImage(video, 0, 0, w, h);
+      segOffCtx.globalCompositeOperation = 'destination-in';
+      segOffCtx.drawImage(alphaMask, 0, 0, w, h);
+      segOffCtx.globalCompositeOperation = 'source-over';
+
       if (webcamBgMode === 'blur') {
         // Draw blurred full frame as background
         ctx.filter = 'blur(14px)';
         ctx.drawImage(video, 0, 0, w, h);
         ctx.filter = 'none';
-
-        // Draw sharp person using segmentation mask as alpha
-        segOffCtx.clearRect(0, 0, w, h);
-        segOffCtx.drawImage(latestSegmentationMask, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-in';
-        segOffCtx.drawImage(video, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-over';
-
-        // Composite person on top of blurred background
+        // Composite sharp person on top
         ctx.drawImage(segOffscreen, 0, 0, w, h);
 
       } else if (webcamBgMode === 'image' && webcamBgImage) {
@@ -840,14 +870,7 @@ function startWebcamCanvas() {
           sy = (webcamBgImage.height - sh) / 2;
         }
         ctx.drawImage(webcamBgImage, sx, sy, sw, sh, 0, 0, w, h);
-
-        // Draw person using segmentation mask
-        segOffCtx.clearRect(0, 0, w, h);
-        segOffCtx.drawImage(latestSegmentationMask, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-in';
-        segOffCtx.drawImage(video, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-over';
-
+        // Composite sharp person on top
         ctx.drawImage(segOffscreen, 0, 0, w, h);
       }
     } else {
@@ -867,7 +890,11 @@ function stopWebcamCanvas() {
   const canvas = document.getElementById('webcamCanvas');
   if (canvas._segInterval) { clearInterval(canvas._segInterval); canvas._segInterval = null; }
   latestSegmentationMask = null;
-  video.style.display = '';
+  video.style.position = '';
+  video.style.width = '';
+  video.style.height = '';
+  video.style.opacity = '';
+  video.style.pointerEvents = '';
   canvas.style.display = 'none';
 }
 
@@ -886,13 +913,33 @@ function showPage(page) {
   if (page === 'analytics') loadAnalytics();
 }
 
+// ——— Auth ———
+function getAdminToken() { return localStorage.getItem('capsule_admin_token') || ''; }
+function setAdminToken(token) { localStorage.setItem('capsule_admin_token', token); }
+
+(function checkAuth() {
+  if (!getAdminToken()) {
+    const token = prompt('Enter your Capsule admin token:');
+    if (token) setAdminToken(token.trim());
+  }
+})();
+
 // ——— API helpers ———
 async function api(path, opts = {}) {
+  const headers = {};
+  if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+  const token = getAdminToken();
+  if (token) headers['X-Admin-Token'] = token;
   const res = await fetch(path, {
-    headers: opts.body && !(opts.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {},
+    headers,
     ...opts,
     body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined
   });
+  if (res.status === 401) {
+    localStorage.removeItem('capsule_admin_token');
+    const newToken = prompt('Invalid or missing admin token. Please enter your token:');
+    if (newToken) { setAdminToken(newToken.trim()); return api(path, opts); }
+  }
   return res.json();
 }
 
