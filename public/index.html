@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src 'self' https://*.cloudinary.com blob:; connect-src 'self'; img-src 'self' data: blob:;">
   <title>Capsule — Record. Share. Track.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -592,21 +593,24 @@
       <button class="btn-icon" onclick="closeAISettings()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5;">Connect a free AI provider. Your key stays in your browser only.</p>
-      <div style="margin-bottom:12px;">
-        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;font-weight:500;">Provider</label>
-        <select class="pace-select" id="aiProvider" style="width:100%;padding:10px;" onchange="updateProviderHelp()">
-          <option value="groq">Groq (free, no credit card)</option>
-          <option value="openai">OpenAI (paid, ~$0.01/script)</option>
-        </select>
+      <div style="text-align:center;padding:12px 0;">
+        <div id="aiStatusIcon" style="width:48px;height:48px;background:var(--accent-glow);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" width="24" height="24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg>
+        </div>
+        <h4 style="margin-bottom:4px;">Server-side AI</h4>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.5;">AI features are powered by the server.<br>No API key needed on your end.</p>
       </div>
-      <div id="providerHelp" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
-      <input type="password" class="share-link-input" id="aiKeyInput" placeholder="Paste API key..." style="width:100%;margin-bottom:12px;border-radius:8px;" />
-      <p style="font-size:11px;color:var(--text-muted);">No key? Write Script still works with smart templates.</p>
+      <div style="margin-top:16px;padding:12px;background:var(--surface);border-radius:8px;">
+        <div style="font-size:12px;color:var(--text-muted);font-weight:500;margin-bottom:8px;">Capabilities</div>
+        <div style="font-size:13px;line-height:2;">
+          <span style="color:var(--green);">&#10003;</span> Whisper transcription<br>
+          <span style="color:var(--green);">&#10003;</span> AI title &amp; description<br>
+          <span style="color:var(--green);">&#10003;</span> Script generation<br>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeAISettings()">Cancel</button>
-      <button class="btn btn-violet" onclick="saveAIKey()">Save Key</button>
+      <button class="btn btn-secondary" onclick="closeAISettings()">Close</button>
     </div>
   </div>
 </div>
@@ -687,6 +691,12 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let screenStream = null;
 let webcamStream = null;
+let compositeCanvas = null;
+let compositeCtx = null;
+let compositeRAF = null;
+let compositeWorker = null;
+let screenVideo = null;
+let usePiP = false;
 let timerInterval = null;
 let seconds = 0;
 let isPaused = false;
@@ -898,6 +908,141 @@ function stopWebcamCanvas() {
   canvas.style.display = 'none';
 }
 
+// ——— Picture-in-Picture Webcam (always-on-top OS window) ———
+async function openWebcamPiP() {
+  const vid = document.getElementById('webcamPreview');
+  if (!vid.requestPictureInPicture) return false;
+  try {
+    await vid.play();
+    await vid.requestPictureInPicture();
+    vid.addEventListener('leavepictureinpicture', () => { usePiP = false; }, { once: true });
+    return true;
+  } catch (err) {
+    console.warn('PiP failed:', err);
+    return false;
+  }
+}
+
+function closeWebcamPiP() {
+  if (document.pictureInPictureElement) {
+    document.exitPictureInPicture().catch(() => {});
+  }
+}
+
+// ——— Composite Canvas (fallback: bakes webcam into the recording) ———
+function getWebcamBubbleRadius() {
+  if (webcamSize === 'sm') return 50;
+  if (webcamSize === 'lg') return 120;
+  return 80; // md
+}
+
+function startCompositing(screenStream) {
+  compositeCanvas = document.createElement('canvas');
+  compositeCtx = compositeCanvas.getContext('2d');
+
+  // Hidden video element to decode screen capture frames
+  screenVideo = document.createElement('video');
+  screenVideo.srcObject = screenStream;
+  screenVideo.muted = true;
+  screenVideo.playsInline = true;
+  screenVideo.play().catch(() => {});
+
+  // Web Worker for timing — keeps firing even when tab is in background
+  compositeWorker = new Worker(URL.createObjectURL(new Blob([
+    'let iv; self.onmessage = e => { if (e.data === "start") { iv = setInterval(() => self.postMessage("tick"), 33); } else { clearInterval(iv); } };'
+  ], { type: 'application/javascript' })));
+
+  function drawComposite() {
+    if (!screenVideo || !compositeCanvas) return;
+    const sw = screenVideo.videoWidth || 1920;
+    const sh = screenVideo.videoHeight || 1080;
+    if (compositeCanvas.width !== sw) compositeCanvas.width = sw;
+    if (compositeCanvas.height !== sh) compositeCanvas.height = sh;
+    compositeCtx.drawImage(screenVideo, 0, 0, sw, sh);
+    if (webcamStream && options.webcam) drawWebcamBubble(compositeCtx, sw, sh);
+  }
+
+  // Use rAF when tab is visible (smooth), worker ticks when backgrounded (persistent)
+  function onVisibleFrame() {
+    if (!compositeCanvas) return;
+    drawComposite();
+    compositeRAF = requestAnimationFrame(onVisibleFrame);
+  }
+
+  compositeWorker.onmessage = () => {
+    if (document.hidden) drawComposite();
+  };
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  compositeRAF = requestAnimationFrame(onVisibleFrame);
+  compositeWorker.postMessage('start');
+
+  return compositeCanvas.captureStream(30);
+}
+
+function onVisibilityChange() {
+  if (!compositeCanvas) return;
+  if (!document.hidden && !compositeRAF) {
+    // Tab came back — restart rAF loop
+    function visibleLoop() {
+      if (!compositeCanvas) return;
+      if (screenVideo) {
+        const sw = screenVideo.videoWidth || 1920;
+        const sh = screenVideo.videoHeight || 1080;
+        if (compositeCanvas.width !== sw) compositeCanvas.width = sw;
+        if (compositeCanvas.height !== sh) compositeCanvas.height = sh;
+        compositeCtx.drawImage(screenVideo, 0, 0, sw, sh);
+        if (webcamStream && options.webcam) drawWebcamBubble(compositeCtx, sw, sh);
+      }
+      compositeRAF = requestAnimationFrame(visibleLoop);
+    }
+    compositeRAF = requestAnimationFrame(visibleLoop);
+  } else if (document.hidden && compositeRAF) {
+    cancelAnimationFrame(compositeRAF);
+    compositeRAF = null;
+  }
+}
+
+function drawWebcamBubble(ctx, sw, sh) {
+  const radius = getWebcamBubbleRadius() * (sw / 1920);
+  const padding = 24 * (sw / 1920);
+  const cx = padding + radius;
+  const cy = sh - padding - radius;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  const webcamEl = (webcamBgMode !== 'none' && document.getElementById('webcamCanvas').style.display !== 'none')
+    ? document.getElementById('webcamCanvas')
+    : document.getElementById('webcamPreview');
+  const ww = webcamEl.videoWidth || webcamEl.width || 320;
+  const wh = webcamEl.videoHeight || webcamEl.height || 240;
+  const diameter = radius * 2;
+  const scale = Math.max(diameter / ww, diameter / wh);
+  const dw = ww * scale;
+  const dh = wh * scale;
+  ctx.drawImage(webcamEl, cx - dw / 2, cy - dh / 2, dw, dh);
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = '#8b5cf6';
+  ctx.lineWidth = Math.max(3, 3 * (sw / 1920));
+  ctx.stroke();
+}
+
+function stopCompositing() {
+  if (compositeRAF) { cancelAnimationFrame(compositeRAF); compositeRAF = null; }
+  if (compositeWorker) { compositeWorker.postMessage('stop'); compositeWorker.terminate(); compositeWorker = null; }
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+  if (screenVideo) { screenVideo.srcObject = null; screenVideo = null; }
+  compositeCanvas = null;
+  compositeCtx = null;
+}
+
 // Slides data
 let slides = [];
 let currentSlideIdx = 0;
@@ -957,31 +1102,13 @@ document.getElementById('scrollSpeed').addEventListener('input', function() {
   document.getElementById('scrollSpeedLabel').textContent = this.value + 'x';
 });
 
-// ——— AI Script Writer ———
-function getAIKey() { return localStorage.getItem('screencap_ai_key') || ''; }
-function getAIProvider() { return localStorage.getItem('screencap_ai_provider') || 'groq'; }
-
+// ——— AI Script Writer (server-side) ———
 function aiQuickPrompt(text) {
   document.getElementById('aiPrompt').value = text;
   generateScript();
 }
 
-function updateProviderHelp() {
-  const provider = document.getElementById('aiProvider').value;
-  const help = document.getElementById('providerHelp');
-  if (provider === 'groq') {
-    help.innerHTML = 'Free — no credit card needed. Get a key at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent);">console.groq.com/keys</a>';
-  } else {
-    help.innerHTML = 'Paid (~$0.01/script). Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent);">platform.openai.com/api-keys</a>';
-  }
-}
-
 function showAISettings() {
-  const current = getAIKey();
-  const provider = getAIProvider();
-  document.getElementById('aiProvider').value = provider;
-  document.getElementById('aiKeyInput').value = current ? '••••••••' + current.slice(-6) : '';
-  updateProviderHelp();
   document.getElementById('aiSettingsModal').classList.add('visible');
 }
 
@@ -989,73 +1116,31 @@ function closeAISettings() {
   document.getElementById('aiSettingsModal').classList.remove('visible');
 }
 
-function saveAIKey() {
-  const val = document.getElementById('aiKeyInput').value.trim();
-  const provider = document.getElementById('aiProvider').value;
-  localStorage.setItem('screencap_ai_provider', provider);
-  if (val && !val.startsWith('••')) {
-    localStorage.setItem('screencap_ai_key', val);
-    showToast('API key saved (stored locally only)');
-  } else if (!val) {
-    localStorage.removeItem('screencap_ai_key');
-    showToast('API key removed');
-  }
-  closeAISettings();
-}
-
 async function generateScript() {
   const prompt = document.getElementById('aiPrompt').value.trim();
   if (!prompt) { showToast('Describe your video first'); return; }
-
-  const apiKey = getAIKey();
-  if (!apiKey) {
-    generateFromTemplate(prompt);
-    return;
-  }
 
   const btn = document.getElementById('aiGenerateBtn');
   const existingScript = document.getElementById('scriptText').value.trim();
   btn.disabled = true;
   btn.innerHTML = '<span class="ai-loading"></span> Writing...';
 
-  const provider = getAIProvider();
-  const systemPrompt = `You are a professional video script writer. Write scripts meant to be read aloud as a teleprompter for screen recordings and video presentations.
-
-Rules:
-- Write in a natural, conversational tone — like talking to a colleague
-- Use short sentences. Break ideas into digestible chunks.
-- Include [PAUSE] markers where the speaker should take a breath
-- Start with a strong hook — no "Hey guys" or "Welcome to my video"
-- End with a clear call to action or summary
-- Don't include stage directions, timestamps, or formatting — just the spoken words
-- Aim for 150-500 words depending on topic
-- If there's an existing script, improve/expand it based on the prompt`;
-
-  const userMsg = existingScript
-    ? `Here's my current script:\n\n${existingScript}\n\nUpdate based on: ${prompt}`
-    : `Write a video script for: ${prompt}`;
-
-  const config = provider === 'groq'
-    ? { url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' }
-    : { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' };
-
   try {
-    const res = await fetch(config.url, {
+    const res = await fetch('/api/ai/script', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: config.model,
-        stream: true,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMsg },
-        ],
-      }),
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': getAdminToken() },
+      body: JSON.stringify({ prompt, existingScript: existingScript || undefined }),
     });
+
+    if (res.status === 503) {
+      // AI not configured on server, fall back to templates
+      generateFromTemplate(prompt);
+      return;
+    }
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error ${res.status}`);
+      throw new Error(err.error || `Server error ${res.status}`);
     }
 
     const reader = res.body.getReader();
@@ -1088,11 +1173,7 @@ Rules:
     showToast('Script ready!');
   } catch (err) {
     console.error('AI error:', err);
-    if (err.message.includes('401') || err.message.includes('invalid')) {
-      showToast('Invalid API key — click the gear to update.');
-    } else {
-      showToast('AI error: ' + err.message);
-    }
+    showToast('AI error: ' + err.message);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg> Write Script';
@@ -1380,7 +1461,7 @@ async function loadAnalytics() {
   document.getElementById('topVideosTable').innerHTML = stats.topVideos.map(v => `
     <tr><td>${escapeHtml(v.title)}</td><td>${v.views}</td>
     <td><span class="pct-bar"><span class="pct-bar-fill" style="width:${Math.round(v.avg_watch_pct)}%"></span></span>${Math.round(v.avg_watch_pct)}%</td>
-    <td><code style="font-size:11px;color:var(--text-muted);font-family:'SF Mono',monospace;">/s/${v.share_id}</code></td></tr>
+    <td><code style="font-size:11px;color:var(--text-muted);font-family:'SF Mono',monospace;">/s/${escapeHtml(v.share_id)}</code></td></tr>
   `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No data yet</td></tr>';
 
   document.getElementById('recentViewsTable').innerHTML = stats.recentViews.map(v => `
@@ -1393,11 +1474,35 @@ async function loadAnalytics() {
 // ——— Recording ———
 async function startRecording() {
   try {
+    // Get webcam FIRST (before getDisplayMedia consumes the user gesture)
+    if (options.webcam) {
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        document.getElementById('webcamPreview').srcObject = webcamStream;
+
+        // Try PiP — creates always-on-top OS window captured by screen recording
+        usePiP = await openWebcamPiP();
+
+        if (!usePiP) {
+          const wf = document.getElementById('webcamFloat');
+          wf.classList.add('visible');
+          wf.classList.remove('size-sm', 'size-md', 'size-lg');
+          wf.classList.add('size-' + webcamSize);
+          if (webcamBgMode !== 'none') {
+            document.getElementById('webcamPreview').addEventListener('loadedmetadata', () => startWebcamCanvas(), { once: true });
+          }
+        }
+      } catch (camErr) {
+        console.warn('Webcam error:', camErr);
+        showToast('Webcam not available — recording without it');
+      }
+    }
+
     const displayOpts = { video: { cursor: 'always' } };
     if (options.sysAudio) displayOpts.audio = true;
     screenStream = await navigator.mediaDevices.getDisplayMedia(displayOpts);
 
-    const tracks = [...screenStream.getVideoTracks()];
+    // Set up audio tracks
     const audioCtx = new AudioContext();
     const dest = audioCtx.createMediaStreamDestination();
     let hasAudio = false;
@@ -1409,26 +1514,20 @@ async function startRecording() {
     if (options.audio) {
       try { const mic = await navigator.mediaDevices.getUserMedia({ audio: true }); audioCtx.createMediaStreamSource(mic).connect(dest); hasAudio = true; } catch {}
     }
-    if (hasAudio) tracks.push(...dest.stream.getAudioTracks());
 
-    if (options.webcam) {
-      try {
-        webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-        document.getElementById('webcamPreview').srcObject = webcamStream;
-        const wf = document.getElementById('webcamFloat');
-        wf.classList.add('visible');
-        wf.classList.remove('size-sm', 'size-md', 'size-lg');
-        wf.classList.add('size-' + webcamSize);
-        if (webcamBgMode !== 'none') {
-          document.getElementById('webcamPreview').addEventListener('loadedmetadata', () => startWebcamCanvas(), { once: true });
-        }
-      } catch (camErr) {
-        console.warn('Webcam error:', camErr);
-        showToast('Webcam not available — recording without it');
-      }
+    // PiP: record raw screen (PiP window is captured by OS). Fallback: composite via canvas.
+    let videoTracks;
+    if (usePiP) {
+      videoTracks = [...screenStream.getVideoTracks()];
+    } else if (webcamStream) {
+      const compositeStream = startCompositing(screenStream);
+      videoTracks = [...compositeStream.getVideoTracks()];
+    } else {
+      videoTracks = [...screenStream.getVideoTracks()];
     }
+    if (hasAudio) videoTracks.push(...dest.stream.getAudioTracks());
 
-    const combined = new MediaStream(tracks);
+    const combined = new MediaStream(videoTracks);
     mediaRecorder = new MediaRecorder(combined, { mimeType: getSupportedMime() });
     recordedChunks = [];
     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
@@ -1486,8 +1585,11 @@ function togglePause() {
 function stopRecording() {
   if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
   clearInterval(timerInterval);
+  closeWebcamPiP();
+  stopCompositing();
   screenStream?.getTracks().forEach(t => t.stop());
-  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); document.getElementById('webcamFloat').classList.remove('visible'); stopWebcamCanvas(); }
+  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; document.getElementById('webcamFloat').classList.remove('visible'); stopWebcamCanvas(); }
+  usePiP = false;
   document.getElementById('recordingActive').classList.remove('visible');
   stopTeleprompter();
   hideSlideOverlay();
@@ -1576,16 +1678,10 @@ function toggleOption(key) {
   }
 }
 
-// ——— AI Insights (Transcribe + Title + Description) ———
+// ——— AI Insights (Server-side Transcribe + Title + Description) ———
 let lastRecordedBlob = null;
 
 async function generateInsights() {
-  const apiKey = getAIKey();
-  if (!apiKey) {
-    showToast('Add an AI key first (click gear icon in Script section)');
-    return;
-  }
-
   const panel = document.getElementById('aiInsightsPanel');
   panel.classList.add('visible');
   document.getElementById('insightTranscript').value = '';
@@ -1598,111 +1694,56 @@ async function generateInsights() {
   btn.innerHTML = '<span class="ai-loading"></span> Working...';
 
   try {
-    // Step 1: Extract audio from video blob
     const blob = lastRecordedBlob;
-    if (!blob) { showToast('No recording found'); return; }
+    if (!blob) { showToast('No recording found'); btn.disabled = false; return; }
 
-    // Step 2: Transcribe via Whisper API
-    const transcript = await transcribeAudio(blob, apiKey);
+    // Step 1: Send video to server for Whisper transcription
+    const transcribeRes = await fetch('/api/ai/transcribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': blob.type || 'video/webm',
+        'X-Admin-Token': getAdminToken(),
+      },
+      body: blob,
+    });
+
+    if (!transcribeRes.ok) {
+      const err = await transcribeRes.json().catch(() => ({}));
+      throw new Error(err.error || `Transcription failed (${transcribeRes.status})`);
+    }
+
+    const { transcript } = await transcribeRes.json();
     document.getElementById('insightTranscript').value = transcript;
     document.getElementById('insightsStatus').textContent = 'Generating...';
 
-    // Step 3: Generate title + description from transcript
-    await generateTitleAndDescription(transcript, apiKey);
+    // Step 2: Generate title + description from transcript
+    const genRes = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Token': getAdminToken(),
+      },
+      body: JSON.stringify({ transcript }),
+    });
+
+    if (!genRes.ok) {
+      const err = await genRes.json().catch(() => ({}));
+      throw new Error(err.error || `Generation failed (${genRes.status})`);
+    }
+
+    const { title, description } = await genRes.json();
+    document.getElementById('insightTitle').value = title || '';
+    document.getElementById('insightDescription').value = description || '';
     document.getElementById('insightsStatus').textContent = 'Done';
     showToast('AI insights ready!');
 
   } catch (err) {
     console.error('AI insights error:', err);
     document.getElementById('insightsStatus').textContent = 'Error';
-    if (err.message.includes('401') || err.message.includes('invalid') || err.message.includes('Incorrect')) {
-      showToast('Invalid API key — click gear to update');
-    } else {
-      showToast('AI error: ' + err.message);
-    }
+    showToast('AI error: ' + err.message);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg> AI Insights';
-  }
-}
-
-async function transcribeAudio(videoBlob, apiKey) {
-  const provider = getAIProvider();
-  const url = provider === 'groq'
-    ? 'https://api.groq.com/openai/v1/audio/transcriptions'
-    : 'https://api.openai.com/v1/audio/transcriptions';
-  const model = provider === 'groq' ? 'whisper-large-v3' : 'whisper-1';
-
-  // Convert video to audio-friendly format for smaller upload
-  const formData = new FormData();
-  formData.append('file', videoBlob, 'recording.webm');
-  formData.append('model', model);
-  formData.append('response_format', 'text');
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}` },
-    body: formData
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Transcription failed (${res.status})`);
-  }
-
-  return (await res.text()).trim();
-}
-
-async function generateTitleAndDescription(transcript, apiKey) {
-  const provider = getAIProvider();
-  const config = provider === 'groq'
-    ? { url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' }
-    : { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' };
-
-  const systemPrompt = `You generate metadata for screen recordings based on their transcript.
-
-Return ONLY valid JSON with exactly these fields:
-{
-  "title": "Short, descriptive title (max 60 chars, no quotes around it)",
-  "description": "2-3 sentence description suitable for social media or a video caption. Professional but engaging."
-}
-
-Rules:
-- Title should be specific and clear, not generic
-- Description should summarize what the video covers and who would find it useful
-- Keep it professional and concise
-- Do NOT wrap in markdown code blocks, return raw JSON only`;
-
-  const res = await fetch(config.url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Here is the transcript of a screen recording:\n\n${transcript.slice(0, 3000)}` }
-      ],
-      temperature: 0.7
-    })
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Generation failed (${res.status})`);
-  }
-
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content || '';
-
-  try {
-    // Strip markdown code block fences if present
-    const clean = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const parsed = JSON.parse(clean);
-    document.getElementById('insightTitle').value = parsed.title || '';
-    document.getElementById('insightDescription').value = parsed.description || '';
-  } catch {
-    // If JSON parsing fails, use the raw content
-    document.getElementById('insightDescription').value = content;
   }
 }
 
@@ -1806,31 +1847,33 @@ function renderVideos() {
   filtered.forEach(v => {
     const card = document.createElement('div');
     card.className = 'video-card';
+    const eid = escapeHtml(v.id);
+    const etitle = escapeHtml(v.title);
     card.innerHTML = `
-      <div class="video-thumb" onclick="playVideo('${v.id}')">
-        <video src="/api/videos/${v.id}/stream" preload="metadata"></video>
+      <div class="video-thumb" onclick="playVideo('${eid}')">
+        <video src="/api/videos/${eid}/stream" preload="metadata"></video>
         <div class="video-duration">${formatDuration(v.duration)}</div>
-        ${v.view_count > 0 ? `<div class="video-views-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>${v.view_count}</div>` : ''}
+        ${v.view_count > 0 ? `<div class="video-views-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>${parseInt(v.view_count)}</div>` : ''}
         ${v.is_shared ? '<div class="shared-badge">Shared</div>' : ''}
       </div>
       <div class="video-info">
-        <input class="video-title-input" value="${escapeHtml(v.title)}" onblur="renameVideo('${v.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
+        <input class="video-title-input" value="${etitle}" onblur="renameVideo('${eid}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
         <div class="video-meta">
           <span class="video-date">${new Date(v.created_at).toLocaleDateString()}</span>
           <div class="video-actions">
-            <button title="View tracking" onclick="event.stopPropagation();showVideoViews('${v.id}','${escapeHtml(v.title)}')">
+            <button title="View tracking" onclick="event.stopPropagation();showVideoViews('${eid}','${etitle}')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button title="Share" class="${v.is_shared ? 'active-share' : ''}" onclick="event.stopPropagation();openShareModal('${v.id}')">
+            <button title="Share" class="${v.is_shared ? 'active-share' : ''}" onclick="event.stopPropagation();openShareModal('${eid}')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             </button>
-            <button title="Move" onclick="event.stopPropagation();showMoveMenu('${v.id}',this)">
+            <button title="Move" onclick="event.stopPropagation();showMoveMenu('${eid}',this)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             </button>
-            <button title="Download" onclick="event.stopPropagation();downloadVideo('${v.id}','${escapeHtml(v.title)}')">
+            <button title="Download" onclick="event.stopPropagation();downloadVideo('${eid}','${etitle}')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
-            <button class="delete" title="Delete" onclick="event.stopPropagation();deleteVideo('${v.id}')">
+            <button class="delete" title="Delete" onclick="event.stopPropagation();deleteVideo('${eid}')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             </button>
           </div>

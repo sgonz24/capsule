@@ -1,16 +1,21 @@
 {
-  "name": "loom-local",
-  "version": "1.0.0",
-  "description": "ScreenCap - Screen Recorder with Share Links & View Tracking",
+  "name": "capsule",
+  "version": "2.0.0",
+  "description": "Capsule — Record, share, and track screen recordings",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.2"
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
   }
 }
