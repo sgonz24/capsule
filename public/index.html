@@ -1480,8 +1480,10 @@ async function startRecording() {
         webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
         document.getElementById('webcamPreview').srcObject = webcamStream;
 
-        // Try PiP — creates always-on-top OS window captured by screen recording
-        usePiP = await openWebcamPiP();
+        // Skip PiP when blur/custom BG is active — PiP is a native OS window, can't apply filters
+        if (webcamBgMode === 'none') {
+          usePiP = await openWebcamPiP();
+        }
 
         if (!usePiP) {
           const wf = document.getElementById('webcamFloat');
@@ -1489,7 +1491,13 @@ async function startRecording() {
           wf.classList.remove('size-sm', 'size-md', 'size-lg');
           wf.classList.add('size-' + webcamSize);
           if (webcamBgMode !== 'none') {
-            document.getElementById('webcamPreview').addEventListener('loadedmetadata', () => startWebcamCanvas(), { once: true });
+            // Start blur/bg canvas once webcam video is ready
+            const vid = document.getElementById('webcamPreview');
+            if (vid.readyState >= 2) {
+              startWebcamCanvas();
+            } else {
+              vid.addEventListener('loadedmetadata', () => startWebcamCanvas(), { once: true });
+            }
           }
         }
       } catch (camErr) {
