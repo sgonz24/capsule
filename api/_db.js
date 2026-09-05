@@ -62,11 +62,18 @@ function generateId() {
 
 function hashPassword(plain) {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.createHash('sha256').update(salt + plain).digest('hex');
-  return salt + ':' + hash;
+  const derived = crypto.scryptSync(plain, salt, 64);
+  return 'scrypt:' + salt + ':' + derived.toString('hex');
 }
 
 function verifyPassword(plain, stored) {
+  if (stored.startsWith('scrypt:')) {
+    const [, salt, hash] = stored.split(':');
+    if (!salt || !hash) return false;
+    const check = crypto.scryptSync(plain, salt, 64);
+    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), check);
+  }
+  // Legacy SHA-256 fallback for existing hashes
   const [salt, hash] = stored.split(':');
   if (!salt || !hash) return false;
   const check = crypto.createHash('sha256').update(salt + plain).digest('hex');
@@ -75,7 +82,10 @@ function verifyPassword(plain, stored) {
 
 function requireAdmin(req, res) {
   const token = process.env.ADMIN_TOKEN;
-  if (!token) return true; // no token configured = no auth enforced
+  if (!token) {
+    res.status(503).json({ error: 'Server misconfigured: ADMIN_TOKEN not set' });
+    return false;
+  }
   const provided = req.headers['x-admin-token'] || req.headers['authorization']?.replace('Bearer ', '');
   if (provided === token) return true;
   res.status(401).json({ error: 'Unauthorized' });

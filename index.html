@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScreenCap — Local Screen Recorder</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface-hover: #242424;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --text-muted: #888;
+      --accent: #4f8cff;
+      --accent-hover: #6ba0ff;
+      --red: #ff4d4d;
+      --red-hover: #ff6b6b;
+      --green: #34d399;
+      --green-hover: #4ade9f;
+      --orange: #f59e0b;
+      --radius: 12px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    header { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .logo-icon svg { width: 18px; height: 18px; fill: white; }
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+
+    .nav-tabs { display: flex; gap: 4px; }
+    .nav-tab { padding: 8px 16px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); font-size: 14px; font-weight: 500; cursor: pointer; transition: all .15s; }
+    .nav-tab:hover { color: var(--text); background: var(--surface-hover); }
+    .nav-tab.active { color: var(--text); background: var(--surface-hover); }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .btn-primary { background: var(--red); color: white; }
+    .btn-primary:hover { background: var(--red-hover); }
+    .btn-secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #2e2e2e; }
+    .btn-accent { background: var(--green); color: #000; }
+    .btn-accent:hover { background: var(--green-hover); }
+    .btn-blue { background: var(--accent); color: white; }
+    .btn-blue:hover { background: var(--accent-hover); }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn-icon { width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-hover); color: var(--text); cursor: pointer; }
+    .btn-icon:hover { background: #2e2e2e; }
+    .btn-icon svg { width: 16px; height: 16px; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Record panel */
+    .record-panel { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 48px 32px; text-align: center; }
+    .record-panel h2 { font-size: 28px; font-weight: 700; }
+    .record-panel p { color: var(--text-muted); font-size: 15px; max-width: 480px; line-height: 1.5; }
+    .record-options { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .toggle-option { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.15s; user-select: none; }
+    .toggle-option:hover { border-color: var(--accent); }
+    .toggle-option.active { border-color: var(--accent); background: rgba(79,140,255,0.1); }
+    .toggle-switch { width: 36px; height: 20px; background: #444; border-radius: 10px; position: relative; transition: background 0.2s; }
+    .toggle-option.active .toggle-switch { background: var(--accent); }
+    .toggle-switch::after { content: ''; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.2s; }
+    .toggle-option.active .toggle-switch::after { transform: translateX(16px); }
+
+    /* Recording active */
+    .recording-active { display: none; flex-direction: column; align-items: center; gap: 20px; }
+    .recording-active.visible { display: flex; }
+    .recording-indicator { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
+    .rec-dot { width: 12px; height: 12px; background: var(--red); border-radius: 50%; animation: pulse 1.2s ease-in-out infinite; }
+    .rec-dot.paused { animation: none; background: var(--orange); }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.4;transform:scale(.85);} }
+    .timer { font-size: 48px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 2px; }
+    .recording-controls { display: flex; gap: 12px; }
+
+    .preview-container { display: none; width: 100%; max-width: 800px; margin: 0 auto; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: #000; }
+    .preview-container.visible { display: block; }
+    .preview-container video { width: 100%; display: block; }
+
+    .webcam-float-preview { position: fixed; bottom: 24px; left: 24px; width: 180px; height: 180px; border-radius: 50%; overflow: hidden; border: 3px solid var(--accent); z-index: 150; box-shadow: 0 4px 20px rgba(0,0,0,.5); display: none; }
+    .webcam-float-preview.visible { display: block; }
+    .webcam-float-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+    /* Library */
+    .library-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .library-header h3 { font-size: 18px; font-weight: 600; }
+    .video-count { color: var(--text-muted); font-size: 14px; }
+    .sort-controls { display: flex; gap: 8px; }
+    .sort-btn { padding: 6px 12px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all .15s; }
+    .sort-btn.active { background: var(--surface-hover); color: var(--text); border-color: var(--accent); }
+
+    .folder-bar { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px; }
+    .folder-tab { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all .15s; }
+    .folder-tab:hover { border-color: #444; color: var(--text); }
+    .folder-tab.active { background: var(--surface-hover); border-color: var(--accent); color: var(--text); }
+    .folder-tab svg { width: 14px; height: 14px; }
+    .folder-count { background: var(--surface-hover); padding: 1px 7px; border-radius: 10px; font-size: 11px; }
+    .folder-tab.active .folder-count { background: rgba(79,140,255,.2); }
+    .add-folder-btn { border-style: dashed !important; }
+
+    .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+
+    .video-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: all .15s; }
+    .video-card:hover { border-color: #444; transform: translateY(-2px); }
+    .video-thumb { position: relative; aspect-ratio: 16/9; background: #000; overflow: hidden; cursor: pointer; }
+    .video-thumb video { width: 100%; height: 100%; object-fit: cover; }
+    .video-duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.8); padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .video-views-badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.8); padding: 2px 8px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; gap: 4px; }
+    .video-views-badge svg { width: 12px; height: 12px; }
+    .shared-badge { position: absolute; top: 8px; left: 8px; background: rgba(79,140,255,.9); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+
+    .video-info { padding: 12px 16px; }
+    .video-title-input { background: transparent; border: 1px solid transparent; color: var(--text); font-size: 14px; font-weight: 600; width: 100%; padding: 2px 4px; border-radius: 4px; outline: none; margin-bottom: 6px; }
+    .video-title-input:focus { border-color: var(--accent); background: var(--surface-hover); }
+    .video-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .video-date { font-size: 12px; color: var(--text-muted); }
+    .video-actions { display: flex; gap: 2px; }
+    .video-actions button { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer; transition: all .15s; }
+    .video-actions button:hover { background: var(--surface-hover); color: var(--text); }
+    .video-actions button.delete:hover { background: rgba(255,77,77,.15); color: var(--red); }
+    .video-actions button.active-share { color: var(--accent); }
+    .video-actions button svg { width: 14px; height: 14px; }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: .4; }
+
+    /* Share modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.visible { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 90%; max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-sm { max-width: 480px; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-header h3 { font-size: 16px; font-weight: 600; }
+    .modal-body { padding: 20px; overflow-y: auto; }
+    .modal-body video { width: 100%; border-radius: 8px; background: #000; }
+    .modal-footer { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--border); justify-content: flex-end; }
+
+    /* Share link UI */
+    .share-link-box { display: flex; gap: 8px; margin: 16px 0; }
+    .share-link-input { flex: 1; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; font-family: monospace; outline: none; }
+    .share-link-input:focus { border-color: var(--accent); }
+    .share-option { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .share-option:last-child { border-bottom: none; }
+    .share-option-label { font-size: 14px; }
+    .share-option-label small { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+    .share-toggle { width: 44px; height: 24px; background: #444; border-radius: 12px; position: relative; cursor: pointer; transition: background .2s; border: none; }
+    .share-toggle.on { background: var(--accent); }
+    .share-toggle::after { content: ''; position: absolute; width: 18px; height: 18px; background: white; border-radius: 50%; top: 3px; left: 3px; transition: transform .2s; }
+    .share-toggle.on::after { transform: translateX(20px); }
+    .pw-input { padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; width: 160px; outline: none; }
+    .pw-input:focus { border-color: var(--accent); }
+
+    /* Analytics page */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .stat-card .stat-value { font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+    .stat-card .stat-label { font-size: 13px; color: var(--text-muted); }
+
+    .view-table { width: 100%; border-collapse: collapse; }
+    .view-table th { text-align: left; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .view-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .view-table tr:hover { background: var(--surface-hover); }
+
+    .pct-bar { width: 60px; height: 6px; background: #333; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+    .pct-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+    .divider { height: 1px; background: var(--border); margin: 32px 0; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 20px; font-size: 14px; z-index: 300; transform: translateY(100px); opacity: 0; transition: all .3s; }
+    .toast.visible { transform: translateY(0); opacity: 1; }
+
+    @media (max-width: 640px) {
+      .container { padding: 16px; }
+      header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      .video-grid { grid-template-columns: 1fr; }
+      .timer { font-size: 36px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></div>
+    ScreenCap
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-page="record" onclick="showPage('record')">Record</button>
+    <button class="nav-tab" data-page="library" onclick="showPage('library')">Library</button>
+    <button class="nav-tab" data-page="analytics" onclick="showPage('analytics')">Analytics</button>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-primary" id="startRecordBtn" onclick="startRecording()">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+      Record
+    </button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ====== RECORD PAGE ====== -->
+  <div class="page active" id="page-record">
+    <div class="record-panel" id="recordPanel">
+      <h2>Record your screen</h2>
+      <p>No limits. No uploads. Record, share a link, and track who watched.</p>
+      <div class="record-options">
+        <div class="toggle-option" id="toggleWebcam" onclick="toggleOption('webcam')">
+          <div class="toggle-switch"></div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Webcam
+        </div>
+        <div class="toggle-option active" id="toggleAudio" onclick="toggleOption('audio')">
+          <div class="toggle-switch"></div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+          Microphone
+        </div>
+        <div class="toggle-option active" id="toggleSysAudio" onclick="toggleOption('sysAudio')">
+          <div class="toggle-switch"></div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          System Audio
+        </div>
+      </div>
+      <button class="btn btn-primary" style="padding:14px 32px;font-size:16px;" onclick="startRecording()">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="12" cy="12" r="6"/></svg>
+        Record Screen
+      </button>
+    </div>
+
+    <div class="recording-active" id="recordingActive">
+      <div class="recording-indicator">
+        <div class="rec-dot" id="recDot"></div>
+        <span id="recStatus">Recording</span>
+      </div>
+      <div class="timer" id="timer">00:00</div>
+      <div class="recording-controls">
+        <button class="btn btn-secondary" id="pauseBtn" onclick="togglePause()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          Pause
+        </button>
+        <button class="btn btn-primary" onclick="stopRecording()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          Stop & Save
+        </button>
+      </div>
+    </div>
+
+    <div class="preview-container" id="previewContainer">
+      <video id="previewVideo" controls></video>
+    </div>
+    <div id="previewActions" style="display:none;justify-content:center;gap:12px;margin-top:16px;">
+      <button class="btn btn-accent" onclick="downloadLatest()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Video
+      </button>
+      <button class="btn btn-blue" onclick="shareLatest()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share Link
+      </button>
+      <button class="btn btn-secondary" onclick="dismissPreview()">Done</button>
+    </div>
+  </div>
+
+  <!-- ====== LIBRARY PAGE ====== -->
+  <div class="page" id="page-library">
+    <div class="library-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <h3>My Videos</h3>
+        <span class="video-count" id="videoCount">0 videos</span>
+      </div>
+      <div class="sort-controls">
+        <button class="sort-btn active" data-sort="newest" onclick="sortVideos('newest')">Newest</button>
+        <button class="sort-btn" data-sort="oldest" onclick="sortVideos('oldest')">Oldest</button>
+        <button class="sort-btn" data-sort="name" onclick="sortVideos('name')">Name</button>
+      </div>
+    </div>
+    <div class="folder-bar" id="folderBar"></div>
+    <div class="video-grid" id="videoGrid"></div>
+    <div class="empty-state" id="emptyState">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" opacity=".3"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <p>No recordings yet. Hit Record to get started.</p>
+    </div>
+  </div>
+
+  <!-- ====== ANALYTICS PAGE ====== -->
+  <div class="page" id="page-analytics">
+    <h3 style="font-size:18px;font-weight:600;margin-bottom:20px;">View Analytics</h3>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-value" id="statVideos">0</div><div class="stat-label">Total Videos</div></div>
+      <div class="stat-card"><div class="stat-value" id="statViews">0</div><div class="stat-label">Total Views</div></div>
+      <div class="stat-card"><div class="stat-value" id="statViewers">0</div><div class="stat-label">Unique Viewers</div></div>
+      <div class="stat-card"><div class="stat-value" id="statWatchTime">0m</div><div class="stat-label">Total Watch Time</div></div>
+    </div>
+
+    <h4 style="font-size:15px;font-weight:600;margin-bottom:12px;">Top Videos</h4>
+    <table class="view-table" style="margin-bottom:32px;">
+      <thead><tr><th>Video</th><th>Views</th><th>Avg. Watched</th><th>Link</th></tr></thead>
+      <tbody id="topVideosTable"></tbody>
+    </table>
+
+    <h4 style="font-size:15px;font-weight:600;margin-bottom:12px;">Recent Views</h4>
+    <table class="view-table">
+      <thead><tr><th>Viewer</th><th>Video</th><th>Watched</th><th>When</th></tr></thead>
+      <tbody id="recentViewsTable"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Share Modal -->
+<div class="modal-overlay" id="shareModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Share Video</h3>
+      <button class="btn-icon" onclick="closeShareModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:8px;">Anyone with this link can view the video.</p>
+      <div class="share-link-box">
+        <input type="text" class="share-link-input" id="shareLinkInput" readonly />
+        <button class="btn btn-blue btn-sm" onclick="copyShareLink()">Copy</button>
+      </div>
+      <div class="share-option">
+        <div class="share-option-label">
+          Link active
+          <small>Toggle sharing on/off</small>
+        </div>
+        <button class="share-toggle on" id="shareActiveToggle" onclick="toggleShareActive()"></button>
+      </div>
+      <div class="share-option">
+        <div class="share-option-label">
+          Allow download
+          <small>Viewers can download the file</small>
+        </div>
+        <button class="share-toggle on" id="shareDownloadToggle" onclick="toggleShareDownload()"></button>
+      </div>
+      <div class="share-option">
+        <div class="share-option-label">
+          Password protect
+          <small>Require password to view</small>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="text" class="pw-input" id="sharePassword" placeholder="No password" />
+          <button class="btn btn-sm btn-secondary" onclick="saveSharePassword()">Set</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeShareModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Video Playback Modal -->
+<div class="modal-overlay" id="playerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">Video</h3>
+      <button class="btn-icon" onclick="closePlayerModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <video id="modalVideo" controls></video>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePlayerModal()">Close</button>
+      <button class="btn btn-blue" id="modalShareBtn" onclick="shareFromModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share
+      </button>
+      <button class="btn btn-accent" id="modalDownload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Video Detail / Views Modal -->
+<div class="modal-overlay" id="viewsModal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <h3 id="viewsModalTitle">Video Views</h3>
+      <button class="btn-icon" onclick="closeViewsModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <table class="view-table" style="width:100%;">
+        <thead><tr><th>Viewer</th><th>Watched</th><th>When</th></tr></thead>
+        <tbody id="videoViewsTable"></tbody>
+      </table>
+      <div id="noViewsMsg" style="text-align:center;color:var(--text-muted);padding:24px;font-size:14px;">No views yet. Share this video to start tracking.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeViewsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Webcam float -->
+<div class="webcam-float-preview" id="webcamFloat">
+  <video id="webcamPreview" autoplay muted playsinline></video>
+</div>
+
+<script>
+// ——— State ———
+let mediaRecorder = null;
+let recordedChunks = [];
+let screenStream = null;
+let webcamStream = null;
+let timerInterval = null;
+let seconds = 0;
+let isPaused = false;
+let latestVideoId = null;
+let currentShareVideoId = null;
+let currentModalVideoId = null;
+
+let videos = [];
+let folders = ['all'];
+let currentFolder = 'all';
+let currentSort = 'newest';
+
+const options = { webcam: false, audio: true, sysAudio: true };
+
+const BASE = window.location.origin;
+
+// ——— Page Navigation ———
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
+
+  if (page === 'library') loadLibrary();
+  if (page === 'analytics') loadAnalytics();
+}
+
+// ——— API helpers ———
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: opts.body && !(opts.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {},
+    ...opts,
+    body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  return res.json();
+}
+
+// ——— Load Library ———
+async function loadLibrary() {
+  videos = await api('/api/videos');
+  const foldersData = await api('/api/folders');
+  folders = foldersData.includes('all') ? foldersData : ['all', ...foldersData];
+  renderFolders();
+  renderVideos();
+}
+
+// ——— Load Analytics ———
+async function loadAnalytics() {
+  const stats = await api('/api/stats');
+
+  document.getElementById('statVideos').textContent = stats.totalVideos;
+  document.getElementById('statViews').textContent = stats.totalViews;
+  document.getElementById('statViewers').textContent = stats.uniqueViewers;
+
+  const mins = Math.floor(stats.totalWatchTime / 60);
+  document.getElementById('statWatchTime').textContent = mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h ${mins%60}m`;
+
+  // Top videos
+  const topTbody = document.getElementById('topVideosTable');
+  topTbody.innerHTML = stats.topVideos.map(v => `
+    <tr>
+      <td>${escapeHtml(v.title)}</td>
+      <td>${v.views}</td>
+      <td>
+        <span class="pct-bar"><span class="pct-bar-fill" style="width:${Math.round(v.avg_watch_pct)}%"></span></span>
+        ${Math.round(v.avg_watch_pct)}%
+      </td>
+      <td><code style="font-size:12px;color:var(--text-muted);">/s/${v.share_id}</code></td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No data yet</td></tr>';
+
+  // Recent views
+  const recentTbody = document.getElementById('recentViewsTable');
+  recentTbody.innerHTML = stats.recentViews.map(v => `
+    <tr>
+      <td>${escapeHtml(v.viewer_name || 'Anonymous')}</td>
+      <td>${escapeHtml(v.video_title)}</td>
+      <td>
+        <span class="pct-bar"><span class="pct-bar-fill" style="width:${Math.round(v.total_percent)}%"></span></span>
+        ${Math.round(v.total_percent)}%
+      </td>
+      <td style="color:var(--text-muted);font-size:13px;">${timeAgo(v.viewed_at)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No views yet</td></tr>';
+}
+
+// ——— Recording ———
+async function startRecording() {
+  try {
+    const displayOpts = { video: { cursor: 'always' } };
+    if (options.sysAudio) displayOpts.audio = true;
+    screenStream = await navigator.mediaDevices.getDisplayMedia(displayOpts);
+
+    const tracks = [...screenStream.getVideoTracks()];
+    const audioCtx = new AudioContext();
+    const dest = audioCtx.createMediaStreamDestination();
+    let hasAudio = false;
+
+    if (screenStream.getAudioTracks().length > 0) {
+      audioCtx.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())).connect(dest);
+      hasAudio = true;
+    }
+    if (options.audio) {
+      try {
+        const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx.createMediaStreamSource(mic).connect(dest);
+        hasAudio = true;
+      } catch {}
+    }
+    if (hasAudio) tracks.push(...dest.stream.getAudioTracks());
+
+    if (options.webcam) {
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById('webcamPreview').srcObject = webcamStream;
+        document.getElementById('webcamFloat').classList.add('visible');
+      } catch {}
+    }
+
+    const combined = new MediaStream(tracks);
+    mediaRecorder = new MediaRecorder(combined, { mimeType: getSupportedMime() });
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = onRecordingStop;
+    screenStream.getVideoTracks()[0].onended = () => { if (mediaRecorder?.state !== 'inactive') stopRecording(); };
+
+    mediaRecorder.start(200);
+    showPage('record');
+    document.getElementById('recordPanel').style.display = 'none';
+    document.getElementById('recordingActive').classList.add('visible');
+    document.getElementById('previewContainer').classList.remove('visible');
+    document.getElementById('previewActions').style.display = 'none';
+
+    seconds = 0; isPaused = false;
+    updateTimer();
+    timerInterval = setInterval(() => { if (!isPaused) { seconds++; updateTimer(); } }, 1000);
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') showToast('Recording failed: ' + err.message);
+  }
+}
+
+function getSupportedMime() {
+  for (const t of ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+function togglePause() {
+  if (!mediaRecorder) return;
+  if (isPaused) {
+    mediaRecorder.resume(); isPaused = false;
+    document.getElementById('recDot').classList.remove('paused');
+    document.getElementById('recStatus').textContent = 'Recording';
+    document.getElementById('pauseBtn').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+  } else {
+    mediaRecorder.pause(); isPaused = true;
+    document.getElementById('recDot').classList.add('paused');
+    document.getElementById('recStatus').textContent = 'Paused';
+    document.getElementById('pauseBtn').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume';
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
+  clearInterval(timerInterval);
+  screenStream?.getTracks().forEach(t => t.stop());
+  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); document.getElementById('webcamFloat').classList.remove('visible'); }
+  document.getElementById('recordingActive').classList.remove('visible');
+}
+
+async function onRecordingStop() {
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const now = new Date();
+  const title = `Recording ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  showToast('Uploading recording…');
+
+  try {
+    // Step 1: Get Cloudinary upload signature
+    const sig = await api('/api/upload-sig');
+    if (sig.error) throw new Error(sig.error);
+
+    // Step 2: Upload video to Cloudinary
+    const cloudForm = new FormData();
+    cloudForm.append('file', blob, 'recording.webm');
+    cloudForm.append('api_key', sig.apiKey);
+    cloudForm.append('timestamp', sig.timestamp);
+    cloudForm.append('signature', sig.signature);
+    cloudForm.append('folder', sig.folder);
+
+    const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/video/upload`, {
+      method: 'POST',
+      body: cloudForm
+    });
+    if (!cloudRes.ok) throw new Error('Cloudinary upload failed');
+    const cloudData = await cloudRes.json();
+
+    // Step 3: Save metadata to database
+    const result = await api('/api/videos', {
+      method: 'POST',
+      body: {
+        title,
+        duration: seconds.toString(),
+        folder: currentFolder === 'all' ? 'all' : currentFolder,
+        cloudinaryUrl: cloudData.secure_url,
+        fileSize: cloudData.bytes
+      }
+    });
+    latestVideoId = result.id;
+
+    // Show preview
+    const url = URL.createObjectURL(blob);
+    document.getElementById('previewVideo').src = url;
+    document.getElementById('previewContainer').classList.add('visible');
+    document.getElementById('previewActions').style.display = 'flex';
+    document.getElementById('recordPanel').style.display = 'none';
+
+    showToast('Recording saved!');
+  } catch (err) {
+    console.error('Upload failed:', err);
+    showToast('Upload failed: ' + err.message);
+  }
+}
+
+function downloadLatest() {
+  if (!latestVideoId) return;
+  const a = document.createElement('a');
+  a.href = `/api/videos/${latestVideoId}/stream`;
+  a.download = 'recording.webm';
+  a.click();
+}
+
+function shareLatest() {
+  if (latestVideoId) openShareModal(latestVideoId);
+}
+
+function dismissPreview() {
+  document.getElementById('previewContainer').classList.remove('visible');
+  document.getElementById('previewActions').style.display = 'none';
+  document.getElementById('recordPanel').style.display = '';
+}
+
+function updateTimer() {
+  const m = Math.floor(seconds/60).toString().padStart(2,'0');
+  const s = (seconds%60).toString().padStart(2,'0');
+  document.getElementById('timer').textContent = `${m}:${s}`;
+}
+
+function toggleOption(key) {
+  options[key] = !options[key];
+  const el = document.getElementById(key === 'webcam' ? 'toggleWebcam' : key === 'audio' ? 'toggleAudio' : 'toggleSysAudio');
+  el.classList.toggle('active', options[key]);
+}
+
+// ——— Folders ———
+async function createFolder() {
+  const name = prompt('Folder name:');
+  if (!name?.trim()) return;
+  await api('/api/folders', { method: 'POST', body: { name: name.trim() } });
+  loadLibrary();
+}
+
+function selectFolder(name) {
+  currentFolder = name;
+  document.querySelectorAll('.folder-tab').forEach(t => t.classList.toggle('active', t.dataset.folder === name));
+  renderVideos();
+}
+
+function renderFolders() {
+  const bar = document.getElementById('folderBar');
+  bar.innerHTML = '';
+  folders.forEach(f => {
+    const count = f === 'all' ? videos.length : videos.filter(v => v.folder === f).length;
+    const btn = document.createElement('button');
+    btn.className = `folder-tab ${f === currentFolder ? 'active' : ''}`;
+    btn.dataset.folder = f;
+    btn.onclick = () => selectFolder(f);
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${f === 'all' ? '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>' : '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'}</svg> ${f === 'all' ? 'All Videos' : escapeHtml(f)} <span class="folder-count">${count}</span>`;
+
+    if (f !== 'all') {
+      btn.oncontextmenu = async (e) => {
+        e.preventDefault();
+        if (confirm(`Delete folder "${f}"?`)) {
+          await api(`/api/folders/${encodeURIComponent(f)}`, { method: 'DELETE' });
+          if (currentFolder === f) currentFolder = 'all';
+          loadLibrary();
+        }
+      };
+    }
+    bar.appendChild(btn);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'folder-tab add-folder-btn';
+  addBtn.onclick = createFolder;
+  addBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Folder';
+  bar.appendChild(addBtn);
+}
+
+// ——— Render Videos ———
+function sortVideos(mode) {
+  currentSort = mode;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === mode));
+  renderVideos();
+}
+
+function getFiltered() {
+  let f = currentFolder === 'all' ? [...videos] : videos.filter(v => v.folder === currentFolder);
+  if (currentSort === 'newest') f.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  else if (currentSort === 'oldest') f.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+  else f.sort((a,b) => a.title.localeCompare(b.title));
+  return f;
+}
+
+function renderVideos() {
+  const grid = document.getElementById('videoGrid');
+  const empty = document.getElementById('emptyState');
+  const filtered = getFiltered();
+
+  document.getElementById('videoCount').textContent = `${videos.length} video${videos.length !== 1 ? 's' : ''}`;
+
+  if (filtered.length === 0) { grid.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  grid.innerHTML = '';
+
+  filtered.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'video-card';
+    card.innerHTML = `
+      <div class="video-thumb" onclick="playVideo('${v.id}')">
+        <video src="/api/videos/${v.id}/stream" preload="metadata"></video>
+        <div class="video-duration">${formatDuration(v.duration)}</div>
+        ${v.view_count > 0 ? `<div class="video-views-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>${v.view_count}</div>` : ''}
+        ${v.is_shared ? '<div class="shared-badge">SHARED</div>' : ''}
+      </div>
+      <div class="video-info">
+        <input class="video-title-input" value="${escapeHtml(v.title)}"
+          onblur="renameVideo('${v.id}', this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()" />
+        <div class="video-meta">
+          <span class="video-date">${new Date(v.created_at).toLocaleDateString()}</span>
+          <div class="video-actions">
+            <button title="View tracking" onclick="event.stopPropagation();showVideoViews('${v.id}','${escapeHtml(v.title)}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button title="Share link" class="${v.is_shared ? 'active-share' : ''}" onclick="event.stopPropagation();openShareModal('${v.id}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            </button>
+            <button title="Move to folder" onclick="event.stopPropagation();showMoveMenu('${v.id}',this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button title="Download" onclick="event.stopPropagation();downloadVideo('${v.id}','${escapeHtml(v.title)}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+            <button class="delete" title="Delete" onclick="event.stopPropagation();deleteVideo('${v.id}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+    const thumb = card.querySelector('.video-thumb video');
+    card.querySelector('.video-thumb').addEventListener('mouseenter', () => { thumb.currentTime = 0; thumb.play().catch(()=>{}); });
+    card.querySelector('.video-thumb').addEventListener('mouseleave', () => { thumb.pause(); thumb.currentTime = 0; });
+
+    grid.appendChild(card);
+  });
+}
+
+// ——— Video Actions ———
+function playVideo(id) {
+  const v = videos.find(v => v.id === id);
+  if (!v) return;
+  currentModalVideoId = id;
+  document.getElementById('modalTitle').textContent = v.title;
+  document.getElementById('modalVideo').src = `/api/videos/${id}/stream`;
+  document.getElementById('modalDownload').onclick = () => downloadVideo(id, v.title);
+  document.getElementById('playerModal').classList.add('visible');
+}
+
+function closePlayerModal() {
+  document.getElementById('playerModal').classList.remove('visible');
+  const vid = document.getElementById('modalVideo'); vid.pause(); vid.src = '';
+}
+
+function shareFromModal() {
+  closePlayerModal();
+  if (currentModalVideoId) openShareModal(currentModalVideoId);
+}
+
+async function renameVideo(id, title) {
+  if (!title?.trim()) return;
+  await api(`/api/videos/${id}`, { method: 'PATCH', body: { title: title.trim() } });
+}
+
+async function deleteVideo(id) {
+  if (!confirm('Delete this recording?')) return;
+  await api(`/api/videos/${id}`, { method: 'DELETE' });
+  loadLibrary();
+  showToast('Video deleted');
+}
+
+function downloadVideo(id, title) {
+  const a = document.createElement('a');
+  a.href = `/api/videos/${id}/stream`;
+  a.download = `${(title || 'recording').replace(/[^a-zA-Z0-9 _-]/g,'')}.webm`;
+  a.click();
+}
+
+// ——— Move Menu ———
+let activeMoveMenu = null;
+function showMoveMenu(videoId, btn) {
+  closeMoveMenu();
+  const rect = btn.getBoundingClientRect();
+  const dd = document.createElement('div');
+  dd.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.4);`;
+  folders.forEach(f => {
+    const b = document.createElement('button');
+    b.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:transparent;color:var(--text);font-size:13px;border-radius:4px;cursor:pointer;';
+    b.textContent = f === 'all' ? 'All Videos' : f;
+    b.onmouseover = () => b.style.background = 'var(--surface-hover)';
+    b.onmouseout = () => b.style.background = 'transparent';
+    b.onclick = async () => {
+      await api(`/api/videos/${videoId}`, { method: 'PATCH', body: { folder: f } });
+      closeMoveMenu();
+      loadLibrary();
+      showToast(`Moved to ${f === 'all' ? 'All Videos' : f}`);
+    };
+    dd.appendChild(b);
+  });
+  document.body.appendChild(dd);
+  activeMoveMenu = dd;
+  setTimeout(() => document.addEventListener('click', closeMoveMenu, { once: true }), 10);
+}
+function closeMoveMenu() { if (activeMoveMenu) { activeMoveMenu.remove(); activeMoveMenu = null; } }
+
+// ——— Share Modal ———
+async function openShareModal(videoId) {
+  currentShareVideoId = videoId;
+  const v = videos.find(v => v.id === videoId);
+  if (!v) { await loadLibrary(); }
+  const vid = videos.find(v => v.id === videoId);
+  if (!vid) return;
+
+  // Enable sharing if not already
+  if (!vid.is_shared) {
+    await api(`/api/videos/${videoId}`, { method: 'PATCH', body: { is_shared: 1 } });
+    vid.is_shared = 1;
+  }
+
+  document.getElementById('shareLinkInput').value = `${BASE}/s/${vid.share_id}`;
+  document.getElementById('shareActiveToggle').classList.toggle('on', !!vid.is_shared);
+  document.getElementById('shareDownloadToggle').classList.toggle('on', vid.allow_download !== 0);
+  document.getElementById('sharePassword').value = vid.share_password || '';
+  document.getElementById('shareModal').classList.add('visible');
+}
+
+function closeShareModal() {
+  document.getElementById('shareModal').classList.remove('visible');
+  loadLibrary();
+}
+
+function copyShareLink() {
+  const input = document.getElementById('shareLinkInput');
+  navigator.clipboard.writeText(input.value);
+  showToast('Link copied!');
+}
+
+async function toggleShareActive() {
+  const toggle = document.getElementById('shareActiveToggle');
+  const isOn = toggle.classList.toggle('on');
+  await api(`/api/videos/${currentShareVideoId}`, { method: 'PATCH', body: { is_shared: isOn ? 1 : 0 } });
+}
+
+async function toggleShareDownload() {
+  const toggle = document.getElementById('shareDownloadToggle');
+  const isOn = toggle.classList.toggle('on');
+  await api(`/api/videos/${currentShareVideoId}`, { method: 'PATCH', body: { allow_download: isOn ? 1 : 0 } });
+}
+
+async function saveSharePassword() {
+  const pw = document.getElementById('sharePassword').value;
+  await api(`/api/videos/${currentShareVideoId}`, { method: 'PATCH', body: { share_password: pw || null } });
+  showToast(pw ? 'Password set' : 'Password removed');
+}
+
+// ——— View Tracking Modal ———
+async function showVideoViews(videoId, title) {
+  document.getElementById('viewsModalTitle').textContent = `Views: ${title}`;
+  const views = await api(`/api/videos/${videoId}/views`);
+  const tbody = document.getElementById('videoViewsTable');
+  const noMsg = document.getElementById('noViewsMsg');
+
+  if (views.length === 0) {
+    tbody.innerHTML = '';
+    noMsg.style.display = '';
+  } else {
+    noMsg.style.display = 'none';
+    tbody.innerHTML = views.map(v => `
+      <tr>
+        <td>${escapeHtml(v.viewer_name || 'Anonymous')}</td>
+        <td>
+          <span class="pct-bar"><span class="pct-bar-fill" style="width:${Math.round(v.total_percent)}%"></span></span>
+          ${Math.round(v.total_percent)}%
+        </td>
+        <td style="color:var(--text-muted);font-size:13px;">${timeAgo(v.viewed_at)}</td>
+      </tr>
+    `).join('');
+  }
+  document.getElementById('viewsModal').classList.add('visible');
+}
+
+function closeViewsModal() { document.getElementById('viewsModal').classList.remove('visible'); }
+
+// ——— Helpers ———
+function formatDuration(secs) {
+  const m = Math.floor(secs/60).toString().padStart(2,'0');
+  const s = (secs%60).toString().padStart(2,'0');
+  return `${m}:${s}`;
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function timeAgo(dateStr) {
+  const d = new Date(dateStr + 'Z');
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2500);
+}
+
+document.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; if (e.key === 'Escape') { closePlayerModal(); closeShareModal(); closeViewsModal(); } });
+
+// ——— Init ———
+loadLibrary();
+</script>
+</body>
+</html>

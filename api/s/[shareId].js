@@ -22,12 +22,8 @@ module.exports = async function handler(req, res) {
     let pw = null;
 
     if (req.method === 'POST') {
-      // Parse URL-encoded form body
       const body = await parseFormBody(req);
       pw = body.pw;
-    } else {
-      // Support legacy GET ?pw= links during transition
-      pw = req.query.pw;
     }
 
     if (!pw || !verifyPassword(pw, video.share_password)) {

@@ -1,9 +1,39 @@
 const { getDb, securityHeaders } = require('./_db');
 
+// Simple in-memory rate limiter: max 20 requests per IP per minute
+const rateMap = new Map();
+const RATE_WINDOW = 60000;
+const RATE_MAX = 20;
+
+function rateLimit(ip) {
+  const now = Date.now();
+  const entry = rateMap.get(ip);
+  if (!entry || now - entry.start > RATE_WINDOW) {
+    rateMap.set(ip, { start: now, count: 1 });
+    return false;
+  }
+  entry.count++;
+  if (entry.count > RATE_MAX) return true;
+  return false;
+}
+
+// Clean up stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateMap) {
+    if (now - entry.start > RATE_WINDOW) rateMap.delete(ip);
+  }
+}, 300000);
+
 module.exports = async function handler(req, res) {
   securityHeaders(res);
 
   if (req.method === 'POST') {
+    const viewerIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+    if (rateLimit(viewerIp)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+
     const sql = getDb();
     const { video_id, viewer_name, watch_duration, total_percent } = req.body;
 
@@ -15,7 +45,6 @@ module.exports = async function handler(req, res) {
     const safeDuration = Math.max(0, Math.min(parseInt(watch_duration) || 0, 86400));
     const safePercent = Math.max(0, Math.min(parseFloat(total_percent) || 0, 100));
 
-    const viewerIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
     const userAgent = String(req.headers['user-agent'] || '').slice(0, 500);
 
     await sql`
