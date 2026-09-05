@@ -97,6 +97,7 @@
     .webcam-float-preview.size-md { width: 160px; height: 160px; }
     .webcam-float-preview.size-lg { width: 240px; height: 240px; }
     .webcam-float-preview video, .webcam-float-preview canvas { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    .webcam-float-preview canvas { position: absolute; top: 0; left: 0; z-index: 1; }
 
     /* ——— Webcam Sub-options ——— */
     .webcam-sub-options { display: none; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: -8px; }
@@ -296,7 +297,6 @@
       .record-panel h2 { font-size: 24px; }
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -751,108 +751,63 @@ function handleBgUpload(e) {
   img.src = URL.createObjectURL(file);
 }
 
-let selfieSegmentation = null;
-let latestSegmentationMask = null;
-let segOffscreen = null;
-let segOffCtx = null;
-
-async function initSegmentation() {
-  if (selfieSegmentation) return;
-  selfieSegmentation = new SelfieSegmentation({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
-  });
-  selfieSegmentation.setOptions({ modelSelection: 1, selfieMode: true });
-  selfieSegmentation.onResults((results) => {
-    latestSegmentationMask = results.segmentationMask;
-  });
-  await selfieSegmentation.initialize();
-}
-
 function startWebcamCanvas() {
+  // Stop any existing loop first
+  if (webcamCanvasRAF) { cancelAnimationFrame(webcamCanvasRAF); webcamCanvasRAF = null; }
   if (webcamBgMode === 'none') return;
+
   const video = document.getElementById('webcamPreview');
   const canvas = document.getElementById('webcamCanvas');
   const ctx = canvas.getContext('2d');
 
-  video.style.display = 'none';
+  // Canvas sits on top of video; video stays visible so browser keeps decoding frames
   canvas.style.display = 'block';
-
-  // Init segmentation in background
-  initSegmentation().then(() => {
-    sendFrameForSegmentation(video);
-  });
-
-  // Send frames to MediaPipe at ~15fps (separate from render loop)
-  let segInterval = null;
-  function sendFrameForSegmentation(vid) {
-    if (segInterval) clearInterval(segInterval);
-    segInterval = setInterval(async () => {
-      if (!webcamStream || webcamBgMode === 'none' || !selfieSegmentation) return;
-      if (vid.videoWidth === 0) return;
-      try { await selfieSegmentation.send({ image: vid }); } catch (e) {}
-    }, 66); // ~15fps for segmentation
-    // Store interval so we can clear it on stop
-    canvas._segInterval = segInterval;
-  }
 
   function drawFrame() {
     if (!webcamStream || webcamBgMode === 'none') { stopWebcamCanvas(); return; }
-    const w = video.videoWidth || 320;
-    const h = video.videoHeight || 240;
-    canvas.width = w;
-    canvas.height = h;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    // Wait for video to have dimensions
+    if (!w || !h) { webcamCanvasRAF = requestAnimationFrame(drawFrame); return; }
 
-    if (latestSegmentationMask) {
-      // Create offscreen canvas for compositing if needed
-      if (!segOffscreen || segOffscreen.width !== w || segOffscreen.height !== h) {
-        segOffscreen = document.createElement('canvas');
-        segOffscreen.width = w;
-        segOffscreen.height = h;
-        segOffCtx = segOffscreen.getContext('2d');
-      }
+    // Only reset canvas size if it changed (avoids clearing every frame)
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
 
-      if (webcamBgMode === 'blur') {
-        // Draw blurred full frame as background
-        ctx.filter = 'blur(14px)';
-        ctx.drawImage(video, 0, 0, w, h);
-        ctx.filter = 'none';
-
-        // Draw sharp person using segmentation mask as alpha
-        segOffCtx.clearRect(0, 0, w, h);
-        segOffCtx.drawImage(latestSegmentationMask, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-in';
-        segOffCtx.drawImage(video, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-over';
-
-        // Composite person on top of blurred background
-        ctx.drawImage(segOffscreen, 0, 0, w, h);
-
-      } else if (webcamBgMode === 'image' && webcamBgImage) {
-        // Draw custom background image (cover fit)
-        const imgRatio = webcamBgImage.width / webcamBgImage.height;
-        const canvasRatio = w / h;
-        let sx = 0, sy = 0, sw = webcamBgImage.width, sh = webcamBgImage.height;
-        if (imgRatio > canvasRatio) {
-          sw = webcamBgImage.height * canvasRatio;
-          sx = (webcamBgImage.width - sw) / 2;
-        } else {
-          sh = webcamBgImage.width / canvasRatio;
-          sy = (webcamBgImage.height - sh) / 2;
-        }
-        ctx.drawImage(webcamBgImage, sx, sy, sw, sh, 0, 0, w, h);
-
-        // Draw person using segmentation mask
-        segOffCtx.clearRect(0, 0, w, h);
-        segOffCtx.drawImage(latestSegmentationMask, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-in';
-        segOffCtx.drawImage(video, 0, 0, w, h);
-        segOffCtx.globalCompositeOperation = 'source-over';
-
-        ctx.drawImage(segOffscreen, 0, 0, w, h);
-      }
-    } else {
-      // Fallback while segmentation is loading: just show the video
+    if (webcamBgMode === 'blur') {
+      // Blurred version of the full webcam feed
+      ctx.save();
+      ctx.filter = 'blur(12px)';
       ctx.drawImage(video, 0, 0, w, h);
+      ctx.restore();
+      // Sharp person in center ellipse
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(w / 2, h / 2, w * 0.38, h * 0.45, 0, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(video, 0, 0, w, h);
+      ctx.restore();
+    } else if (webcamBgMode === 'image' && webcamBgImage) {
+      // Custom background image (cover fit)
+      const imgRatio = webcamBgImage.width / webcamBgImage.height;
+      const canvasRatio = w / h;
+      let sx = 0, sy = 0, sw = webcamBgImage.width, sh = webcamBgImage.height;
+      if (imgRatio > canvasRatio) {
+        sw = webcamBgImage.height * canvasRatio;
+        sx = (webcamBgImage.width - sw) / 2;
+      } else {
+        sh = webcamBgImage.width / canvasRatio;
+        sy = (webcamBgImage.height - sh) / 2;
+      }
+      ctx.drawImage(webcamBgImage, sx, sy, sw, sh, 0, 0, w, h);
+      // Person in center ellipse on top of background image
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(w / 2, h / 2, w * 0.38, h * 0.45, 0, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(video, 0, 0, w, h);
+      ctx.restore();
     }
 
     webcamCanvasRAF = requestAnimationFrame(drawFrame);
@@ -863,11 +818,7 @@ function startWebcamCanvas() {
 
 function stopWebcamCanvas() {
   if (webcamCanvasRAF) { cancelAnimationFrame(webcamCanvasRAF); webcamCanvasRAF = null; }
-  const video = document.getElementById('webcamPreview');
   const canvas = document.getElementById('webcamCanvas');
-  if (canvas._segInterval) { clearInterval(canvas._segInterval); canvas._segInterval = null; }
-  latestSegmentationMask = null;
-  video.style.display = '';
   canvas.style.display = 'none';
 }
 
@@ -1458,24 +1409,15 @@ async function onRecordingStop() {
   document.getElementById('previewActions').style.display = 'flex';
   document.getElementById('recordPanel').style.display = 'none';
 
-  showToast('Uploading...');
+  const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+  showUploadProgress(0, sizeMB);
 
   try {
     const sig = await api('/api/upload-sig');
 
-    const cloudForm = new FormData();
-    cloudForm.append('file', blob);
-    cloudForm.append('timestamp', sig.timestamp);
-    cloudForm.append('signature', sig.signature);
-    cloudForm.append('api_key', sig.apiKey);
-    cloudForm.append('folder', sig.folder);
-    cloudForm.append('resource_type', 'video');
-
-    const cloudRes = await fetch(
-      `https://api.cloudinary.com/v1_1/${sig.cloudName}/video/upload`,
-      { method: 'POST', body: cloudForm }
-    );
-    const cloudData = await cloudRes.json();
+    const cloudData = await uploadToCloudinary(blob, sig, (pct) => {
+      showUploadProgress(pct, sizeMB);
+    });
 
     if (!cloudData.secure_url) throw new Error(cloudData.error?.message || 'Upload failed');
 
@@ -1491,10 +1433,12 @@ async function onRecordingStop() {
     });
 
     latestVideoId = result.id;
+    hideUploadProgress();
     showToast('Saved!');
     loadLibrary();
   } catch (err) {
     console.error('Upload error:', err);
+    hideUploadProgress();
     showToast('Upload failed: ' + err.message);
   }
 }
@@ -1903,6 +1847,100 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff/86400)}d ago`;
 }
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('visible'); setTimeout(() => t.classList.remove('visible'), 2500); }
+
+// ——— Upload with progress (chunked for large files) ———
+const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB chunks
+
+async function uploadToCloudinary(blob, sig, onProgress) {
+  const url = `https://api.cloudinary.com/v1_1/${sig.cloudName}/video/upload`;
+
+  // Small files: single upload with progress
+  if (blob.size <= CHUNK_SIZE) {
+    return new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append('file', blob);
+      form.append('timestamp', sig.timestamp);
+      form.append('signature', sig.signature);
+      form.append('api_key', sig.apiKey);
+      form.append('folder', sig.folder);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch (e) { reject(new Error('Invalid response from Cloudinary')); }
+      };
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.timeout = 300000;
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.send(form);
+    });
+  }
+
+  // Large files: chunked upload
+  const totalSize = blob.size;
+  const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+  const uniqueId = 'capsule-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  let result = null;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, totalSize);
+    const chunk = blob.slice(start, end);
+
+    const form = new FormData();
+    form.append('file', chunk);
+    form.append('timestamp', sig.timestamp);
+    form.append('signature', sig.signature);
+    form.append('api_key', sig.apiKey);
+    form.append('folder', sig.folder);
+
+    const contentRange = `bytes ${start}-${end - 1}/${totalSize}`;
+    const headers = {
+      'X-Unique-Upload-Id': uniqueId,
+      'Content-Range': contentRange
+    };
+
+    const res = await fetch(url, { method: 'POST', headers, body: form });
+    result = await res.json();
+
+    if (result.error) throw new Error(result.error.message);
+
+    // Update progress based on chunks completed
+    const pct = Math.round(((i + 1) / totalChunks) * 100);
+    if (onProgress) onProgress(pct);
+  }
+
+  return result;
+}
+
+function showUploadProgress(pct, sizeMB) {
+  let bar = document.getElementById('uploadProgress');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'uploadProgress';
+    bar.style.cssText = 'position:fixed;bottom:80px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;z-index:300;min-width:240px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-size:13px;';
+    bar.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;" id="uploadLabel">Uploading...</div>
+      <div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+        <div id="uploadFill" style="height:100%;background:var(--accent);border-radius:3px;transition:width .3s;width:0%"></div>
+      </div>
+      <div style="margin-top:6px;color:var(--text-muted);font-size:11px;" id="uploadDetail"></div>
+    `;
+    document.body.appendChild(bar);
+  }
+  document.getElementById('uploadFill').style.width = pct + '%';
+  document.getElementById('uploadLabel').textContent = pct < 100 ? `Uploading... ${pct}%` : 'Processing...';
+  document.getElementById('uploadDetail').textContent = `${sizeMB} MB`;
+}
+
+function hideUploadProgress() {
+  const bar = document.getElementById('uploadProgress');
+  if (bar) bar.remove();
+}
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
